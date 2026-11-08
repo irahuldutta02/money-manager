@@ -1,11 +1,11 @@
 import "server-only";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
+import { passkey } from "@better-auth/passkey";
 import { nextCookies } from "better-auth/next-js";
 import { TRANSACTIONS_ENABLED, client, getDb } from "./mongodb";
 
-// Google only, with basic scopes (openid, email, profile). Drive access is
-// requested later and incrementally (Phase 3) via linkSocial with extra scopes.
+// Google only, with basic scopes (openid, email, profile).
 export const auth = betterAuth({
   database: mongodbAdapter(getDb(), {
     client,
@@ -21,5 +21,5 @@ export const auth = betterAuth({
     },
   },
   // Must be the last plugin: lets server code set auth cookies.
-  plugins: [nextCookies()],
+  plugins: [passkey({ rpName: "Money Manager" }), nextCookies()],
 });

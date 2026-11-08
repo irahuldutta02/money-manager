@@ -21,38 +21,10 @@ import {
   parseBackupFile,
 } from "@/lib/client/backup-file";
 
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
-
-const SOURCES = [
-  { value: "drive", label: "Google Drive" },
-  { value: "file", label: "Manual file" },
-];
-
 const MODES = [
   { value: "merge", label: "Merge" },
   { value: "replace", label: "Replace" },
 ];
-
-const when = (iso) =>
-  new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(iso));
-
-const kb = (n) => (n ? `${Math.max(1, Math.round(Number(n) / 1024))} KB` : "");
-
-/** Asks Google for drive.appdata (offline), returning here afterwards. */
-async function connectDrive() {
-  const { error } = await authClient.linkSocial({
-    provider: "google",
-    scopes: [DRIVE_SCOPE],
-    callbackURL: "/more/backup",
-    errorCallbackURL: "/more/backup?drive=error",
-    // offline + consent => Google returns a refresh token for server-side refresh.
-    additionalParams: { access_type: "offline", prompt: "consent" },
-  });
-  if (error) throw new Error(error.message ?? "Could not start Google sign-in");
-}
 
 function RestoreSheet({ file, onClose, intro, extra, buildBody, fixedMode }) {
   const toast = useToast();
@@ -67,7 +39,7 @@ function RestoreSheet({ file, onClose, intro, extra, buildBody, fixedMode }) {
     try {
       const r = await apiFetch("/api/backup/restore", {
         method: "POST",
-        body: buildBody ? await buildBody(mode) : { fileId: file.id, mode },
+        body: await buildBody(mode),
       });
       invalidateAll();
       onClose();
@@ -101,9 +73,7 @@ function RestoreSheet({ file, onClose, intro, extra, buildBody, fixedMode }) {
       }
     >
       <div className="space-y-3 pt-2">
-        <p className="text-label-2">
-          {intro ?? (file ? `Backup from ${when(file.createdTime)}.` : "")}
-        </p>
+        <p className="text-label-2">{intro}</p>
         {extra}
         {!fixedMode && (
           <SegmentedControl
@@ -123,117 +93,7 @@ function RestoreSheet({ file, onClose, intro, extra, buildBody, fixedMode }) {
   );
 }
 
-function DriveBackup() {
-  const toast = useToast();
-  const { data, error, loading, retry } = useQuery("/api/backup");
-  const [busy, setBusy] = useState(false);
-  const [restoreFile, setRestoreFile] = useState(null);
-  const [needsReconnect, setNeedsReconnect] = useState(false);
-
-  const reconnectNeeded = needsReconnect || error?.code === "drive_reconnect";
-
-  async function connect() {
-    setBusy(true);
-    try {
-      await connectDrive();
-    } catch (e) {
-      toast.show({ message: e.message });
-      setBusy(false);
-    }
-  }
-
-  async function backupNow() {
-    setBusy(true);
-    try {
-      const r = await apiFetch("/api/backup", { method: "POST" });
-      toast.show({
-        message: `Backed up ${r.counts.transactions} transactions`,
-        duration: 3500,
-      });
-      retry();
-    } catch (e) {
-      if (e.code === "drive_reconnect") setNeedsReconnect(true);
-      else toast.show({ message: e.message });
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  let body;
-  if (loading) {
-    body = (
-      <div aria-busy="true" className="space-y-3 pt-2">
-        <Skeleton className="h-14 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
-  } else if (reconnectNeeded) {
-    body = (
-      <EmptyState
-        icon="alert"
-        title="Reconnect Google Drive"
-        message="Google Drive access expired or was revoked. Reconnect to back up and restore."
-        actionLabel={busy ? "Opening Google…" : "Reconnect Google Drive"}
-        onAction={connect}
-      />
-    );
-  } else if (error && !data) {
-    body = <ErrorState message={error.message} onRetry={retry} />;
-  } else if (!data.connected) {
-    body = (
-      <EmptyState
-        icon="landmark"
-        title="Back up to Google Drive"
-        message="Your backups live in a private app folder on your Drive that only this app can see. Nothing is uploaded until you tap Back up."
-        actionLabel={busy ? "Opening Google…" : "Connect Google Drive"}
-        onAction={connect}
-      />
-    );
-  } else {
-    body = (
-      <>
-        <Button size="lg" onClick={backupNow} loading={busy} className="mb-6">
-          Back up now
-        </Button>
-        {data.backups.length === 0 ? (
-          <EmptyState
-            icon="receipt"
-            title="No backups yet"
-            message="Tap Back up now to save a copy of your data."
-          />
-        ) : (
-          <ListGroup
-            header="Backups"
-            footer="The 10 most recent backups are kept; older ones are deleted automatically. Tap one to restore."
-          >
-            {data.backups.map((f) => (
-              <ListRow
-                key={f.id}
-                onClick={() => setRestoreFile(f)}
-                leading={<CategoryBadge icon="receipt" color="blue" />}
-                title={when(f.createdTime)}
-                subtitle={kb(f.size)}
-              />
-            ))}
-          </ListGroup>
-        )}
-      </>
-    );
-  }
-
-  return (
-    <>
-      {body}
-      <RestoreSheet
-        key={restoreFile?.id ?? "none"}
-        file={restoreFile}
-        onClose={() => setRestoreFile(null)}
-      />
-    </>
-  );
-}
-
-function ManualBackup() {
+function FileBackup() {
   const toast = useToast();
   const fileRef = useRef(null);
   const [passcode, setPasscode] = useState("");
@@ -357,7 +217,6 @@ function ManualBackup() {
 }
 
 export function BackupScreen() {
-  const [source, setSource] = useState("drive");
   return (
     <div>
       <Link
@@ -369,14 +228,7 @@ export function BackupScreen() {
       <h1 className="mb-2 text-[2rem] leading-tight font-bold tracking-tight">
         Backup &amp; restore
       </h1>
-      <SegmentedControl
-        label="Backup type"
-        className="mb-4"
-        options={SOURCES}
-        value={source}
-        onChange={setSource}
-      />
-      {source === "drive" ? <DriveBackup /> : <ManualBackup />}
+      <FileBackup />
     </div>
   );
 }

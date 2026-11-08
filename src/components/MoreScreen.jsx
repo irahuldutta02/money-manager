@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { AppLockSheet } from "@/components/AppLockSheet";
 import { ExportSheet } from "@/components/ExportSheet";
+import { PasskeySheet } from "@/components/PasskeySheet";
 import { ThemeSheet } from "@/components/ThemeSheet";
 import { THEMES, readTheme } from "@/lib/client/theme";
 import { readLock } from "@/lib/client/lock";
@@ -21,6 +22,29 @@ const Chevron = () => (
   </span>
 );
 
+function Avatar({ user }) {
+  const size = "size-12 shrink-0 rounded-full";
+  if (user?.image) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={user.image}
+        alt=""
+        referrerPolicy="no-referrer"
+        className={`${size} object-cover`}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className={`${size} flex items-center justify-center bg-accent-soft text-lg font-semibold text-accent uppercase`}
+    >
+      {(user?.name || user?.email || "?").charAt(0)}
+    </span>
+  );
+}
+
 export function MoreScreen() {
   const router = useRouter();
   const toast = useToast();
@@ -29,6 +53,7 @@ export function MoreScreen() {
   const { data: session } = authClient.useSession();
   const [busy, setBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [passkeyOpen, setPasskeyOpen] = useState(false);
   const [lockOpen, setLockOpen] = useState(false);
   const [lockOn, setLockOn] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
@@ -89,8 +114,23 @@ export function MoreScreen() {
 
       <ListGroup>
         <ListRow
+          leading={<Avatar user={session?.user} />}
           title={session?.user?.name ?? "Signed in"}
           subtitle={session?.user?.email}
+          trailing={
+            <button
+              type="button"
+              onClick={signOut}
+              className="min-h-tap rounded-control px-3 text-[0.9375rem] font-medium text-danger transition-colors hover:bg-fill"
+            >
+              Sign out
+            </button>
+          }
+        />
+        <ListRow
+          title="Passkeys"
+          onClick={() => setPasskeyOpen(true)}
+          trailing={<Chevron />}
         />
       </ListGroup>
 
@@ -123,7 +163,6 @@ export function MoreScreen() {
       <ListGroup header="Data & security">
         <ListRow
           title="Backup & restore"
-          subtitle="Google Drive or a file on this device"
           onClick={() => router.push("/more/backup")}
           trailing={<Chevron />}
         />
@@ -153,7 +192,6 @@ export function MoreScreen() {
       </ListGroup>
 
       <ListGroup footer="Permanently deletes your account and all your data.">
-        <ListRow title="Sign out" className="text-danger" onClick={signOut} />
         <ListRow
           title="Delete account"
           className="text-danger"
@@ -166,6 +204,7 @@ export function MoreScreen() {
         onChanged={() => setThemeId(readTheme())}
       />
       <ExportSheet open={exportOpen} onClose={() => setExportOpen(false)} />
+      <PasskeySheet open={passkeyOpen} onClose={() => setPasskeyOpen(false)} />
       <AppLockSheet
         open={lockOpen}
         onClose={() => setLockOpen(false)}

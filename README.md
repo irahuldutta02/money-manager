@@ -26,21 +26,20 @@ Money Manager helps you:
 * Organize spending with custom categories
 * Plan and track monthly budgets
 * Review trends with per-period stats and charts
-* Keep your data safe with Google Drive or local file backups
-
-Sign-in is Google only. Backups can be stored privately in your own Google Drive app data folder, or exported as a file.
+* Keep your data safe with local file backups
 
 ---
 
 ## ✨ Features
 
 * 🔐 Google Sign-In (Better Auth)
+* 🔑 Passkey sign-in (Touch ID, Face ID or screen lock)
 * 💸 Transactions: add, edit, delete and restore, with receipt attachments
 * 🏦 Accounts & Categories Management, with balance rebuild
 * 🎯 Monthly Budgets, with copy-from-previous-month
 * 📊 Stats & Charts by day, week, month and year
 * 🔍 Search, Filters and CSV Export
-* ☁️ Backup & Restore via Google Drive or a local file
+* ☁️ Backup & Restore via a local file
 * 🔒 Optional App Lock with passcode
 * 🎨 4 Themes (Liquid Glass, Android, Paper, Midnight), each with accent palettes
 * 📱 Installable PWA
@@ -59,8 +58,7 @@ Sign-in is Google only. Backups can be stored privately in your own Google Drive
 
 * Next.js Route Handlers
 * MongoDB (official driver)
-* Better Auth (Google OAuth)
-* Google Drive API (`drive.appdata` scope)
+* Better Auth (Google OAuth and WebAuthn passkeys via `@better-auth/passkey`)
 
 ---
 
@@ -72,6 +70,8 @@ cp .env.example .env.local
 npm run db:indexes
 npm run dev
 ```
+
+> **Passkeys:** they are tied to your domain, taken from `BETTER_AUTH_URL`. A passkey created on `localhost` will not work on production, so set it to your real URL when deploying. An account must exist first (sign up with Google), then add a passkey from More → Passkeys.
 
 ### Environment Variables
 

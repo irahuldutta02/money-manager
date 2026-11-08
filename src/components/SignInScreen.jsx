@@ -43,6 +43,18 @@ export function SignInScreen() {
     if (session?.user) router.replace(next);
   }, [session, next, router]);
 
+  async function signInWithPasskey() {
+    setBusy(true);
+    setError(null);
+    const { error } = await authClient.signIn.passkey();
+    if (error) {
+      setError(error.message || "Passkey sign-in failed.");
+      setBusy(false);
+    } else {
+      router.replace(next);
+    }
+  }
+
   async function signIn() {
     setBusy(true);
     setError(null);
@@ -77,6 +89,15 @@ export function SignInScreen() {
           >
             {!(busy || isPending) && <GoogleLogo />}
             Continue with Google
+          </Button>
+          <Button
+            size="lg"
+            variant="tinted"
+            className="mt-3"
+            onClick={signInWithPasskey}
+            disabled={busy || isPending || Boolean(session?.user)}
+          >
+            Sign in with a passkey
           </Button>
           {error && (
             <p

@@ -21,7 +21,7 @@ import { SiteFooter } from "@/components/SiteFooter";
 export const metadata = {
   title: { absolute: "Money Manager · Know where your money goes" },
   description:
-    "A fast, private expense tracker. Log a spend in seconds, see where it all goes, stay on budget, and back up to your own Google Drive.",
+    "A fast, private expense tracker. Log a spend in seconds, see where it all goes, stay on budget, and back up to a file on your device.",
 };
 
 const FEATURES = [
@@ -47,8 +47,8 @@ const FEATURES = [
   },
   {
     Icon: CloudUpload,
-    title: "Your data, your Drive",
-    body: "Back up and restore from your own Google Drive, or a file on your device. Export everything to CSV any time.",
+    title: "Your data, your file",
+    body: "Back up and restore from a file on your device, optionally protected with a passcode. Export everything to CSV any time.",
   },
   {
     Icon: ShieldCheck,

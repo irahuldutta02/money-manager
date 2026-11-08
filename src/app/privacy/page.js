@@ -22,10 +22,9 @@ const SECTIONS = [
     ],
   ],
   [
-    "Google Drive backups",
+    "Backup files",
     [
-      "Backups are optional. If you connect Google Drive, the app asks for access limited to its own hidden app-data folder. It cannot see or change your other Drive files.",
-      "You can disconnect at any time, and revoke access from your Google Account settings.",
+      "Backups are optional and are created only when you ask. The file is generated for you to save on your own device, and you can protect it with a passcode. We do not keep a copy.",
     ],
   ],
   [
@@ -44,14 +43,14 @@ const SECTIONS = [
   [
     "Sharing",
     [
-      "We share data only with the service providers needed to operate the app (hosting, database, and Google for sign-in and optional Drive backup), or when required by law.",
+      "We share data only with the service providers needed to operate the app (hosting, database, and Google for sign-in), or when required by law.",
     ],
   ],
   [
     "Your choices",
     [
       "You can export all your data to CSV or a backup file at any time.",
-      "You can permanently delete your account from More → Delete account. This removes your account and all your transactions, accounts, categories and budgets. Backups already stored in your own Google Drive remain under your control.",
+      "You can permanently delete your account from More → Delete account. This removes your account and all your transactions, accounts, categories and budgets. Backup files you saved on your own devices remain under your control.",
     ],
   ],
   [

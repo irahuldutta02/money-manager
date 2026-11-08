@@ -16,6 +16,7 @@ const INDEXES = {
   user: [{ key: { email: 1 }, unique: true }],
   session: [{ key: { token: 1 }, unique: true }, { key: { userId: 1 } }],
   account: [{ key: { userId: 1 } }],
+  passkey: [{ key: { userId: 1 } }, { key: { credentialID: 1 } }],
 
   // --- App collections: every query is scoped by userId first ---
   accounts: [{ key: { userId: 1, deletedAt: 1, sortOrder: 1 } }],
