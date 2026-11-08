@@ -44,7 +44,11 @@ export function ThemeSheet({ open, onClose, onChanged }) {
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Appearance">
-      <div role="radiogroup" aria-label="Theme" className="grid gap-2.5 pb-2">
+      <div
+        role="radiogroup"
+        aria-label="Theme"
+        className="grid gap-2.5 pt-2 pb-2"
+      >
         {THEMES.map((t) => {
           const on = t.id === current;
           return (
