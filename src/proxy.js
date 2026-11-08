@@ -25,8 +25,8 @@ export function proxy(request) {
 
 export const config = {
   matcher: [
-    // Everything except: auth endpoints, the sign-in page, build assets and
+    // Everything except: auth endpoints, the sign-in and public legal pages, build assets and
     // PWA/static files (manifest, service worker, icons, robots).
-    "/((?!.*\\.(?:png|svg|ico|jpg|jpeg|webp)$|api/auth(?:/|$)|sign-in|_next/static|_next/image|favicon\\.ico|icon|apple-icon|manifest\\.webmanifest|sw\\.js|robots\\.txt).*)",
+    "/((?!.*\\.(?:png|svg|ico|jpg|jpeg|webp)$|api/auth(?:/|$)|sign-in|privacy(?:/|$)|terms(?:/|$)|_next/static|_next/image|favicon\\.ico|icon|apple-icon|manifest\\.webmanifest|sw\\.js|robots\\.txt).*)",
   ],
 };

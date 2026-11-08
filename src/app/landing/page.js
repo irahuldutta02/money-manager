@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { Brand } from "@/components/Brand";
 import { Backdrop } from "@/components/Backdrop";
+import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata = {
   title: { absolute: "Money Manager · Know where your money goes" },
@@ -181,15 +183,7 @@ export default function LandingPage() {
     <div className="relative isolate overflow-x-clip">
       <Backdrop />
 
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-gutter pt-safe">
-        <Brand size="sm" href="/" className="min-h-tap py-3" />
-        <Link
-          href="/sign-in"
-          className="glass flex min-h-tap items-center rounded-full px-5 text-sm font-semibold"
-        >
-          Sign in
-        </Link>
-      </header>
+      <SiteHeader />
 
       <main>
         {/* Hero */}
@@ -318,40 +312,7 @@ export default function LandingPage() {
         </section>
       </main>
 
-      <footer className="relative mt-10 overflow-hidden border-t border-separator">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-gutter pt-12 sm:flex-row sm:items-end sm:justify-between">
-          <div className="max-w-xs space-y-2 text-sm text-label-2">
-            <p>
-              Built with care for people who like to know where it all went.
-            </p>
-            <p>
-              © Money Manager · Made by{" "}
-              <a
-                href="https://rahultech.in"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-label underline-offset-4 hover:text-accent hover:underline"
-              >
-                rahultech.in
-              </a>
-            </p>
-          </div>
-          <nav aria-label="Footer" className="flex gap-6 text-sm font-semibold">
-            <Link href="/sign-in" className="hover:text-accent">
-              Sign in
-            </Link>
-            <a href="#features" className="hover:text-accent">
-              Features
-            </a>
-          </nav>
-        </div>
-        <p
-          aria-hidden
-          className="lp-footer-word pointer-events-none mt-6 pb-[0.12em] text-center leading-[0.95] font-black tracking-tighter whitespace-nowrap select-none"
-        >
-          Money Manager
-        </p>
-      </footer>
+      <SiteFooter featuresHref="#features" />
     </div>
   );
 }

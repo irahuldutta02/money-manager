@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Brand } from "@/components/Brand";
 import { Backdrop } from "@/components/Backdrop";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -86,7 +87,16 @@ export function SignInScreen() {
             </p>
           )}
           <p className="mt-3 text-center text-xs text-label-2">
-            We only read your name and email to create your account.
+            We only read your name and email to create your account. By
+            continuing you agree to our{" "}
+            <Link href="/terms" className="font-semibold underline">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="font-semibold underline">
+              Privacy Policy
+            </Link>
+            .
           </p>
         </Card>
       </main>
