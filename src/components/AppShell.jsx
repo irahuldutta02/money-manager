@@ -7,6 +7,7 @@ import { ConfirmProvider } from "@/components/ui/Confirm";
 import { TxSheetProvider, useTxSheet } from "@/components/AddTransactionSheet";
 import { MetaProvider } from "@/lib/client/meta";
 import { LockProvider } from "@/components/LockProvider";
+import { authClient } from "@/lib/auth-client";
 
 // Supports the PWA "Add expense" shortcut: /?add=expense opens the sheet.
 function AddShortcut() {
@@ -24,6 +25,20 @@ function AddShortcut() {
   return null;
 }
 
+// The session can end elsewhere (sign out on another device, "sign out other
+// devices"). Better Auth re-checks it when the tab regains focus; once it is
+// gone, leave instead of showing a stale signed-in screen.
+function SessionGuard() {
+  const { data, error, isPending } = authClient.useSession();
+  const gone = !isPending && !error && !data?.user;
+  useEffect(() => {
+    // Hard navigation also clears the in-memory query cache.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    if (gone) location.assign("/sign-in");
+  }, [gone]);
+  return null;
+}
+
 export function AppShell({ children }) {
   return (
     <ToastProvider>
@@ -37,6 +52,7 @@ export function AppShell({ children }) {
                 </div>
               </div>
               <TabBar />
+              <SessionGuard />
               <Suspense>
                 <AddShortcut />
               </Suspense>

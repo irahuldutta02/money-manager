@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useConfirm } from "@/components/ui/Confirm";
 import { AppLockSheet } from "@/components/AppLockSheet";
 import { ExportSheet } from "@/components/ExportSheet";
+import { SessionsSheet } from "@/components/SessionsSheet";
 import { PasskeySheet } from "@/components/PasskeySheet";
 import { ThemeSheet } from "@/components/ThemeSheet";
 import { THEMES, readTheme } from "@/lib/client/theme";
@@ -53,6 +54,7 @@ export function MoreScreen() {
   const { data: session } = authClient.useSession();
   const [busy, setBusy] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
   const [passkeyOpen, setPasskeyOpen] = useState(false);
   const [lockOpen, setLockOpen] = useState(false);
   const [lockOn, setLockOn] = useState(false);
@@ -132,6 +134,11 @@ export function MoreScreen() {
           onClick={() => setPasskeyOpen(true)}
           trailing={<Chevron />}
         />
+        <ListRow
+          title="Signed-in devices"
+          onClick={() => setSessionsOpen(true)}
+          trailing={<Chevron />}
+        />
       </ListGroup>
 
       <ListGroup header="Manage">
@@ -204,6 +211,10 @@ export function MoreScreen() {
         onChanged={() => setThemeId(readTheme())}
       />
       <ExportSheet open={exportOpen} onClose={() => setExportOpen(false)} />
+      <SessionsSheet
+        open={sessionsOpen}
+        onClose={() => setSessionsOpen(false)}
+      />
       <PasskeySheet open={passkeyOpen} onClose={() => setPasskeyOpen(false)} />
       <AppLockSheet
         open={lockOpen}
