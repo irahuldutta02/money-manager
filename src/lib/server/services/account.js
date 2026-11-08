@@ -14,6 +14,7 @@ export async function deleteAccount(userId) {
     col("budgets").deleteMany({ userId }),
     col("categories").deleteMany({ userId }),
     col("accounts").deleteMany({ userId }),
+    col("lending").deleteMany({ userId }),
     col("passkey").deleteMany({ userId }),
   ]);
   await col("userSettings").deleteOne({ _id: userId });

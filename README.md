@@ -25,6 +25,7 @@ Money Manager helps you:
 * Record transactions across multiple accounts
 * Organize spending with custom categories
 * Plan and track monthly budgets
+* Track money you lend and get back, separately from your transactions
 * Review trends with per-period stats and charts
 * Keep your data safe with local file backups
 
@@ -37,6 +38,7 @@ Money Manager helps you:
 * 💸 Transactions: add, edit, delete and restore, with receipt attachments
 * 🏦 Accounts & Categories Management, with balance rebuild
 * 🎯 Monthly Budgets, with copy-from-previous-month
+* 🤝 Track Lending: a separate IOU ledger per person
 * 📊 Stats & Charts by day, week, month and year
 * 🔍 Search, Filters and CSV Export
 * ☁️ Backup & Restore via a local file

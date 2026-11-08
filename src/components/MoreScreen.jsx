@@ -95,7 +95,7 @@ export function MoreScreen() {
     const ok = await confirm({
       title: "Delete account?",
       message:
-        "This permanently deletes your account and all transactions, accounts, categories and budgets. This can't be undone. Export a backup first if you might need it.",
+        "This permanently deletes your account and all transactions, accounts, categories, budgets and lending entries. This can't be undone. Export a backup first if you might need it.",
       confirmLabel: "Delete",
     });
     if (!ok) return;

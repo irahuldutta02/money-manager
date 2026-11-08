@@ -2,6 +2,7 @@ import "server-only";
 import { col, withTransaction } from "../mongodb";
 import { ApiError } from "../api";
 import { recomputeBalances } from "./accounts";
+import { LENDING_KINDS } from "./lending";
 import {
   ACCOUNT_TYPES,
   CATEGORY_TYPES,
@@ -29,13 +30,14 @@ const dated = (doc, ...keys) => {
 
 /** Everything needed to rebuild the user's data, as plain JSON. */
 export async function buildBackup(userId) {
-  const [settings, accounts, categories, transactions, budgets] =
+  const [settings, accounts, categories, transactions, budgets, lending] =
     await Promise.all([
       col("userSettings").findOne({ _id: userId }),
       col("accounts").find({ userId }).toArray(),
       col("categories").find({ userId }).toArray(),
       col("transactions").find({ userId, deletedAt: null }).toArray(),
       col("budgets").find({ userId, deletedAt: null }).toArray(),
+      col("lending").find({ userId, deletedAt: null }).toArray(),
     ]);
   const D = ["deletedAt", "createdAt", "updatedAt"];
   return {
@@ -46,6 +48,7 @@ export async function buildBackup(userId) {
     categories: categories.map((d) => dated(d, ...D, "lastUsedAt")),
     transactions: transactions.map((d) => dated(d, ...D, "date")),
     budgets: budgets.map((d) => dated(d, ...D)),
+    lending: lending.map((d) => dated(d, ...D, "date")),
   };
 }
 
@@ -167,11 +170,33 @@ export function validateBackup(data, userId) {
     };
   });
 
+  // Older backups predate lending, so a missing list just means none.
+  const lending = each(
+    data.lending == null ? [] : list(data.lending, "lending"),
+    "lending",
+    (r) => {
+      const person = str(r.person, "person", { max: 40 }).replace(/\s+/g, " ");
+      return {
+        _id: id(r.id ?? r._id, "id"),
+        userId,
+        person,
+        personKey: person.toLowerCase(),
+        kind: oneOf(r.kind, "kind", LENDING_KINDS),
+        amount: int(r.amount, "amount", { min: 1, max: MAX_AMOUNT }),
+        date: date(r.date, "date"),
+        note: str(r.note, "note", { max: 200, optional: true }),
+        ...stamps(r),
+        deletedAt: null, // backups hold live entries only
+      };
+    },
+  );
+
   return {
     accounts,
     categories,
     transactions,
     budgets,
+    lending,
     accountIds,
     categoryIds,
   };
@@ -179,11 +204,17 @@ export function validateBackup(data, userId) {
 
 // ------------------------------------------------------------------- restore
 
-const COLLECTIONS = ["accounts", "categories", "transactions", "budgets"];
+const COLLECTIONS = [
+  "accounts",
+  "categories",
+  "transactions",
+  "budgets",
+  "lending",
+];
 
 /**
  * Restores a validated backup. "merge" skips ids that already exist;
- * "replace" wipes this user's data in the four collections first.
+ * "replace" wipes this user's data in every backed-up collection first.
  */
 export async function restoreBackup(userId, data, mode) {
   oneOf(mode, "mode", ["merge", "replace"]);
@@ -239,7 +270,13 @@ export async function restoreBackup(userId, data, mode) {
     }
   }
 
-  const counts = { accounts: 0, categories: 0, transactions: 0, budgets: 0 };
+  const counts = {
+    accounts: 0,
+    categories: 0,
+    transactions: 0,
+    budgets: 0,
+    lending: 0,
+  };
   await withTransaction(
     async (session) => {
       if (mode === "replace") {

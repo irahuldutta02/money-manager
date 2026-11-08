@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -340,6 +340,14 @@ export function BudgetScreen() {
   const open = (budget = null) =>
     setSheet((s) => ({ open: true, budget, n: s.n + 1 }));
   const close = () => setSheet((s) => ({ ...s, open: false }));
+
+  // The app's add button (tab bar "+" / sidebar) asks this page to add a budget.
+  useEffect(() => {
+    const onAdd = () =>
+      setSheet((s) => ({ open: true, budget: null, n: s.n + 1 }));
+    window.addEventListener("budget:add", onAdd);
+    return () => window.removeEventListener("budget:add", onAdd);
+  }, []);
   const [copyOpen, setCopyOpen] = useState({ open: false, n: 0 });
   const toast = useToast();
   const confirm = useConfirm();
@@ -521,15 +529,24 @@ export function BudgetScreen() {
               })}
             </ListGroup>
           )}
-          <div className="space-y-2">
-            <Button variant="tinted" size="lg" onClick={() => open()}>
-              Add budget
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant="tinted"
+              size="lg"
+              onClick={openCopy}
+              aria-label="Copy budget from another month"
+              className="px-3 whitespace-nowrap"
+            >
+              Copy from
             </Button>
-            <Button variant="tinted" size="lg" onClick={openCopy}>
-              Copy budget from another month
-            </Button>
-            <Button variant="danger" size="lg" onClick={clearAll}>
-              Delete all budgets
+            <Button
+              variant="danger"
+              size="lg"
+              onClick={clearAll}
+              aria-label="Delete all budgets"
+              className="px-3 whitespace-nowrap"
+            >
+              Delete all
             </Button>
           </div>
         </>
