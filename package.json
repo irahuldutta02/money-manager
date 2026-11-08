@@ -1,0 +1,29 @@
+{
+  "name": "money-manager",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:indexes": "node --env-file=.env.local scripts/ensure-indexes.mjs",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "better-auth": "^1.7.18",
+    "lucide-react": "^1.70.0",
+    "mongodb": "^7.8.0",
+    "next": "16.4.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "^4",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.5",
+    "prettier": "^3.9.10",
+    "tailwindcss": "^4"
+  }
+}
