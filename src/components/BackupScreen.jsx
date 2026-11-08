@@ -86,7 +86,7 @@ function RestoreSheet({ file, onClose, intro, extra, buildBody, fixedMode }) {
         <p className="text-sm text-label-2">
           {mode === "merge"
             ? "Adds records from the backup and skips anything that already exists (matched by ID). Nothing is deleted."
-            : "Deletes ALL current accounts, categories, transactions, budgets and lending, then loads the backup. This cannot be undone."}
+            : "Deletes ALL current accounts, categories, transactions, budgets, lending and net worth, then loads the backup. This cannot be undone."}
         </p>
       </div>
     </BottomSheet>
@@ -146,7 +146,7 @@ function FileBackup() {
     <div className="space-y-6 pt-2">
       <ListGroup
         header="Save to this device"
-        footer="Saves everything (accounts, categories, transactions, budgets, lending and receipts) as a .mmbackup file. Add a passcode to encrypt it; leave it empty for a plain file. If you forget the passcode the file cannot be opened."
+        footer="Saves everything (accounts, categories, transactions, budgets, lending, net worth and receipts) as a .mmbackup file. Add a passcode to encrypt it; leave it empty for a plain file. If you forget the passcode the file cannot be opened."
       >
         <div className="space-y-3 p-4">
           <TextInput
@@ -166,7 +166,7 @@ function FileBackup() {
 
       <ListGroup
         header="Restore from a file"
-        footer="Importing replaces everything in this account (accounts, categories, transactions, budgets and lending) with the contents of the file. This cannot be undone."
+        footer="Importing replaces everything in this account (accounts, categories, transactions, budgets, lending and net worth) with the contents of the file. This cannot be undone."
       >
         <div className="p-4">
           <input

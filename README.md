@@ -26,6 +26,7 @@ Money Manager helps you:
 * Organize spending with custom categories
 * Plan and track monthly budgets
 * Track money you lend and get back, separately from your transactions
+* See your net worth across bank accounts, wallets, investments, loans and credit cards
 * Review trends with per-period stats and charts
 * Keep your data safe with local file backups
 
@@ -39,6 +40,7 @@ Money Manager helps you:
 * 🏦 Accounts & Categories Management, with balance rebuild
 * 🎯 Monthly Budgets, with copy-from-previous-month
 * 🤝 Track Lending: a separate IOU ledger per person
+* 📈 Net Worth: balance history per instrument (accounts, investments, loans)
 * 📊 Stats & Charts by day, week, month and year
 * 🔍 Search, Filters and CSV Export
 * ☁️ Backup & Restore via a local file

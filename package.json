@@ -13,6 +13,7 @@
   "dependencies": {
     "@better-auth/passkey": "^1.7.18",
     "better-auth": "^1.7.18",
+    "jspdf": "^4.2.1",
     "lucide-react": "^1.70.0",
     "mongodb": "^7.8.0",
     "next": "16.4.5",

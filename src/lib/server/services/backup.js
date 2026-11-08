@@ -3,6 +3,8 @@ import { col, withTransaction } from "../mongodb";
 import { ApiError } from "../api";
 import { recomputeBalances } from "./accounts";
 import { LENDING_KINDS } from "./lending";
+import { NW_TYPE_IDS } from "@/lib/networth";
+import { cleanDetails } from "./networth";
 import {
   ACCOUNT_TYPES,
   CATEGORY_TYPES,
@@ -12,6 +14,7 @@ import {
   date,
   id,
   int,
+  iconImage,
   oneOf,
   receipts,
   str,
@@ -30,15 +33,23 @@ const dated = (doc, ...keys) => {
 
 /** Everything needed to rebuild the user's data, as plain JSON. */
 export async function buildBackup(userId) {
-  const [settings, accounts, categories, transactions, budgets, lending] =
-    await Promise.all([
-      col("userSettings").findOne({ _id: userId }),
-      col("accounts").find({ userId }).toArray(),
-      col("categories").find({ userId }).toArray(),
-      col("transactions").find({ userId, deletedAt: null }).toArray(),
-      col("budgets").find({ userId, deletedAt: null }).toArray(),
-      col("lending").find({ userId, deletedAt: null }).toArray(),
-    ]);
+  const [
+    settings,
+    accounts,
+    categories,
+    transactions,
+    budgets,
+    lending,
+    holdings,
+  ] = await Promise.all([
+    col("userSettings").findOne({ _id: userId }),
+    col("accounts").find({ userId }).toArray(),
+    col("categories").find({ userId }).toArray(),
+    col("transactions").find({ userId, deletedAt: null }).toArray(),
+    col("budgets").find({ userId, deletedAt: null }).toArray(),
+    col("lending").find({ userId, deletedAt: null }).toArray(),
+    col("holdings").find({ userId, deletedAt: null }).toArray(),
+  ]);
   const D = ["deletedAt", "createdAt", "updatedAt"];
   return {
     version: BACKUP_VERSION,
@@ -49,6 +60,13 @@ export async function buildBackup(userId) {
     transactions: transactions.map((d) => dated(d, ...D, "date")),
     budgets: budgets.map((d) => dated(d, ...D)),
     lending: lending.map((d) => dated(d, ...D, "date")),
+    holdings: holdings.map((d) => ({
+      ...dated(d, ...D),
+      history: (d.history ?? []).map((h) => ({
+        at: iso(h.at),
+        balance: h.balance,
+      })),
+    })),
   };
 }
 
@@ -191,12 +209,42 @@ export function validateBackup(data, userId) {
     },
   );
 
+  const holdings = each(
+    data.holdings == null ? [] : list(data.holdings, "holdings"),
+    "holdings",
+    (r) => {
+      const balance = int(r.balance ?? 0, "balance");
+      const history = (Array.isArray(r.history) ? r.history : [])
+        .slice(-100)
+        .map((h) => ({
+          at: date(h?.at, "history.at"),
+          balance: int(h?.balance, "history.balance"),
+        }));
+      return {
+        _id: id(r.id ?? r._id, "id"),
+        userId,
+        name: str(r.name, "name", { max: 60 }),
+        type: oneOf(r.type, "type", NW_TYPE_IDS),
+        included: r.included !== false,
+        note: str(r.note, "note", { max: 200, optional: true }),
+        icon: iconImage(r.icon),
+        details: cleanDetails(oneOf(r.type, "type", NW_TYPE_IDS), r.details),
+        balance,
+        history: history.length ? history : [{ at: new Date(), balance }],
+        sortOrder: int(r.sortOrder ?? 0, "sortOrder", { min: 0, max: 1e6 }),
+        ...stamps(r),
+        deletedAt: null,
+      };
+    },
+  );
+
   return {
     accounts,
     categories,
     transactions,
     budgets,
     lending,
+    holdings,
     accountIds,
     categoryIds,
   };
@@ -210,6 +258,7 @@ const COLLECTIONS = [
   "transactions",
   "budgets",
   "lending",
+  "holdings",
 ];
 
 /**
@@ -276,6 +325,7 @@ export async function restoreBackup(userId, data, mode) {
     transactions: 0,
     budgets: 0,
     lending: 0,
+    holdings: 0,
   };
   await withTransaction(
     async (session) => {

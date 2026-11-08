@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Target,
+  TrendingUp,
   Zap,
 } from "lucide-react";
 import { Brand } from "@/components/Brand";
@@ -46,9 +47,14 @@ const FEATURES = [
     body: "Spending by category, income vs expense, and how this month compares with the last.",
   },
   {
+    Icon: TrendingUp,
+    title: "Know your net worth",
+    body: "Track savings, investments, loans and cards in one place with balance history, and download a handover PDF with account details and nominees.",
+  },
+  {
     Icon: CloudUpload,
     title: "Your data, your file",
-    body: "Back up and restore from a file on your device, optionally protected with a passcode. Export everything to CSV any time.",
+    body: "Back up and restore everything, net worth included, from a file on your device, optionally protected with a passcode. Export everything to CSV any time.",
   },
   {
     Icon: ShieldCheck,

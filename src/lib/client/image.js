@@ -17,3 +17,30 @@ export async function fileToReceipt(file) {
   bitmap.close?.();
   return canvas.toDataURL("image/jpeg", 0.7);
 }
+
+const ICON_SIDE = 128;
+
+/** Centre-cropped square PNG data URL (keeps transparency) for small logos. */
+export async function fileToIcon(file) {
+  if (!file.type.startsWith("image/")) throw new Error("Choose an image file.");
+  const bitmap = await createImageBitmap(file).catch(() => null);
+  if (!bitmap) throw new Error("That image couldn't be read.");
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = ICON_SIDE;
+  canvas
+    .getContext("2d")
+    .drawImage(
+      bitmap,
+      (bitmap.width - side) / 2,
+      (bitmap.height - side) / 2,
+      side,
+      side,
+      0,
+      0,
+      ICON_SIDE,
+      ICON_SIDE,
+    );
+  bitmap.close?.();
+  return canvas.toDataURL("image/png");
+}

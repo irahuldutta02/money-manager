@@ -74,6 +74,18 @@ export function receipts(v) {
   return v;
 }
 
+// One small logo stored inline as a base64 data URL (the client downsizes it).
+const ICON_RE = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
+const MAX_ICON_CHARS = 120_000;
+
+export function iconImage(v) {
+  if (v == null || v === "") return "";
+  if (typeof v !== "string" || v.length > MAX_ICON_CHARS || !ICON_RE.test(v)) {
+    throw new ApiError(400, "The icon image is invalid or too large");
+  }
+  return v;
+}
+
 export const COLORS = [
   "red",
   "orange",

@@ -1,7 +1,7 @@
 "use client";
 import { Brand } from "@/components/Brand";
 import { Fragment, useEffect, useState } from "react";
-import { HandCoins } from "lucide-react";
+import { HandCoins, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "@/lib/cx";
@@ -22,24 +22,31 @@ const TABS = [
 ];
 
 const LENDING = "/more/lending";
+const NETWORTH = "/more/networth";
 // Page-specific add actions; the page listens for `event` and opens its sheet.
 const PAGE_ADD = [
   { path: LENDING, label: "Add entry", event: "lending:add" },
+  { path: NETWORTH, label: "Add instrument", event: "networth:add" },
   { path: "/budget", label: "Add budget", event: "budget:add" },
 ];
 const LendingIcon = (p) => <HandCoins strokeWidth={2} {...p} />;
+const NetWorthIcon = (p) => <TrendingUp strokeWidth={2} {...p} />;
 
-// Desktop sidebar: lending gets its own entry, so "More" must not light up too.
-const SIDEBAR_TABS = [
-  ...TABS.slice(0, 3),
+// Pages under /more that get their own nav entry (sidebar + mobile "..." menu),
+// so "More" must not light up for them.
+const MORE_ITEMS = [
   { href: LENDING, label: "Track Lending", Icon: LendingIcon },
-  TABS[3],
+  { href: NETWORTH, label: "Net Worth", Icon: NetWorthIcon },
 ];
+const SIDEBAR_TABS = [...TABS.slice(0, 3), ...MORE_ITEMS, TABS[3]];
 
 const isActive = (pathname, href) => {
   if (href === "/") return pathname === "/";
   if (href === "/more")
-    return pathname.startsWith(href) && !isActive(pathname, LENDING);
+    return (
+      pathname.startsWith(href) &&
+      !MORE_ITEMS.some((m) => pathname.startsWith(m.href))
+    );
   return pathname.startsWith(href);
 };
 
@@ -111,11 +118,7 @@ export function TabBar() {
                             className="glass-strong pointer-events-auto absolute right-0 bottom-[calc(100%+0.75rem)] w-52 overflow-hidden rounded-card p-1"
                           >
                             {[
-                              {
-                                href: LENDING,
-                                label: "Track Lending",
-                                Icon: LendingIcon,
-                              },
+                              ...MORE_ITEMS,
                               { href: "/more", label: "More", Icon: MoreIcon },
                             ].map((m) => (
                               <li key={m.href} role="none">

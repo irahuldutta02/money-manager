@@ -34,6 +34,7 @@ const INDEXES = {
     { key: { userId: 1, categoryId: 1, date: -1 } },
     { key: { note: "text" }, name: "note_text" },
   ],
+  holdings: [{ key: { userId: 1, deletedAt: 1, sortOrder: 1 } }],
   lending: [{ key: { userId: 1, deletedAt: 1, date: -1 } }],
   budgets: [{ key: { userId: 1, month: 1, deletedAt: 1 } }],
   recurringRules: [{ key: { userId: 1, active: 1, nextRunAt: 1 } }],

@@ -1,4 +1,5 @@
 import { cx } from "@/lib/cx";
+import { ChevronDown } from "lucide-react";
 import { Card } from "./Card";
 
 /** iOS-style grouped list section: optional header/footer, rounded inset card, hairline separators. */
@@ -7,29 +8,60 @@ export function ListGroup({
   headerRight,
   footer,
   collapsed = false,
+  onToggle,
   children,
   className,
 }) {
   return (
     <section className={cx("mb-6", className)}>
       {header ? (
-        <div className="mb-1.5 flex items-baseline justify-between px-4">
-          <h2 className="text-[0.8125rem] font-medium tracking-wide text-label-2 uppercase">
-            {header}
-          </h2>
-          {headerRight ? (
-            <span className="tabular text-[0.8125rem] text-label-2">
-              {headerRight}
+        onToggle ? (
+          // Collapsible: the whole header row is the toggle.
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            className="mb-1.5 flex min-h-tap w-full items-center justify-between gap-2 px-4 text-left"
+          >
+            <span className="flex items-center gap-1.5">
+              <ChevronDown
+                aria-hidden
+                size={16}
+                strokeWidth={2.6}
+                className={cx(
+                  "text-label-2 transition-transform duration-200",
+                  collapsed && "-rotate-90",
+                )}
+              />
+              <h2 className="text-[0.8125rem] font-medium tracking-wide text-label-2 uppercase">
+                {header}
+              </h2>
             </span>
-          ) : null}
-        </div>
+            {headerRight ? (
+              <span className="tabular text-[0.8125rem] text-label-2">
+                {headerRight}
+              </span>
+            ) : null}
+          </button>
+        ) : (
+          <div className="mb-1.5 flex items-baseline justify-between px-4">
+            <h2 className="text-[0.8125rem] font-medium tracking-wide text-label-2 uppercase">
+              {header}
+            </h2>
+            {headerRight ? (
+              <span className="tabular text-[0.8125rem] text-label-2">
+                {headerRight}
+              </span>
+            ) : null}
+          </div>
+        )
       ) : null}
       {collapsed ? null : (
         <Card className="overflow-hidden [&>*:not(:first-child)]:border-t [&>*:not(:first-child)]:border-separator">
           {children}
         </Card>
       )}
-      {footer ? (
+      {footer && !collapsed ? (
         <p className="mt-1.5 px-4 text-[0.8125rem] text-label-2">{footer}</p>
       ) : null}
     </section>
