@@ -51,7 +51,9 @@ export function SignInScreen() {
       setError(error.message || "Passkey sign-in failed.");
       setBusy(false);
     } else {
-      router.replace(next);
+      // Full page load, not router.replace: the client router may have cached
+      // the signed-out "/" (landing page) and would show it again.
+      location.assign(next);
     }
   }
 
