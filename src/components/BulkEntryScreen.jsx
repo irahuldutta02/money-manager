@@ -156,16 +156,22 @@ function CategoryRow({ category, entries, currency, onAdd, onOpenHistory }) {
 
   return (
     <div>
-      <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 lg:flex-col lg:items-stretch lg:gap-2">
+      <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 lg:flex-col lg:items-stretch lg:gap-1.5 lg:py-2">
         <div className="flex min-w-0 items-center gap-3 sm:w-56 sm:shrink-0 lg:w-auto">
-          <CategoryBadge icon={category.icon} color={category.color} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[1.0625rem]">{category.name}</div>
+          <CategoryBadge
+            icon={category.icon}
+            color={category.color}
+            className="lg:size-8"
+          />
+          <div className="min-w-0 flex-1 lg:flex lg:items-center lg:justify-between lg:gap-2">
+            <div className="truncate text-[1.0625rem] lg:text-[0.9375rem]">
+              {category.name}
+            </div>
             <button
               type="button"
               disabled={entries.length === 0}
               onClick={onOpenHistory}
-              className="flex items-center gap-1 text-[0.8125rem] text-label-2 disabled:opacity-60"
+              className="flex items-center gap-1 text-[0.8125rem] whitespace-nowrap text-label-2 disabled:opacity-60"
             >
               <span className={cx("tabular", net < 0 && "text-danger")}>
                 {entries.length === 0
@@ -179,7 +185,7 @@ function CategoryRow({ category, entries, currency, onAdd, onOpenHistory }) {
           </div>
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <div className="flex min-h-tap min-w-0 flex-1 items-center gap-2 rounded-control bg-fill px-3 focus-within:bg-accent-soft">
+          <div className="flex min-h-tap min-w-0 flex-1 items-center gap-2 rounded-control bg-fill px-3 focus-within:bg-accent-soft lg:min-h-9">
             <span aria-hidden className="text-label-2">
               {currencySymbol(currency)}
             </span>
@@ -197,12 +203,13 @@ function CategoryRow({ category, entries, currency, onAdd, onOpenHistory }) {
                 e.preventDefault();
                 add(e.ctrlKey || e.metaKey ? -1 : 1);
               }}
-              className="tabular min-w-0 flex-1 bg-transparent py-2 outline-none"
+              className="tabular min-w-0 flex-1 bg-transparent py-2 outline-none lg:py-1"
             />
           </div>
           <Button
             variant="tinted"
             size="icon"
+            className="lg:size-9 lg:min-h-9 lg:min-w-9"
             aria-label={`Add to ${category.name}`}
             onClick={() => add(1)}
           >
@@ -211,6 +218,7 @@ function CategoryRow({ category, entries, currency, onAdd, onOpenHistory }) {
           <Button
             variant="danger"
             size="icon"
+            className="lg:size-9 lg:min-h-9 lg:min-w-9"
             aria-label={`Subtract from ${category.name}`}
             onClick={() => add(-1)}
           >
@@ -387,7 +395,7 @@ export function BulkEntryScreen() {
       >
         <ChevronLeftIcon /> More
       </Link>
-      <h1 className="mb-3 text-[2rem] leading-tight font-bold tracking-tight">
+      <h1 className="mb-3 text-[2rem] leading-tight font-bold tracking-tight lg:mb-1 lg:text-2xl">
         Bulk transactions
       </h1>
 
