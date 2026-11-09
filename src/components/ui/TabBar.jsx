@@ -1,7 +1,7 @@
 "use client";
 import { Brand } from "@/components/Brand";
 import { Fragment, useEffect, useState } from "react";
-import { HandCoins, TrendingUp } from "lucide-react";
+import { HandCoins, ListPlus, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cx } from "@/lib/cx";
@@ -23,6 +23,7 @@ const TABS = [
 
 const LENDING = "/more/lending";
 const NETWORTH = "/more/networth";
+const BULK = "/more/bulk";
 // Page-specific add actions; the page listens for `event` and opens its sheet.
 const PAGE_ADD = [
   { path: LENDING, label: "Add entry", event: "lending:add" },
@@ -31,12 +32,14 @@ const PAGE_ADD = [
 ];
 const LendingIcon = (p) => <HandCoins strokeWidth={2} {...p} />;
 const NetWorthIcon = (p) => <TrendingUp strokeWidth={2} {...p} />;
+const BulkIcon = (p) => <ListPlus strokeWidth={2} {...p} />;
 
 // Pages under /more that get their own nav entry (sidebar + mobile "..." menu),
 // so "More" must not light up for them.
 const MORE_ITEMS = [
   { href: LENDING, label: "Track P2P Lending", Icon: LendingIcon },
   { href: NETWORTH, label: "Net Worth", Icon: NetWorthIcon },
+  { href: BULK, label: "Bulk Transactions", Icon: BulkIcon },
 ];
 const SIDEBAR_TABS = [...TABS.slice(0, 3), ...MORE_ITEMS, TABS[3]];
 
@@ -115,7 +118,7 @@ export function TabBar() {
                           <ul
                             role="menu"
                             aria-label="More"
-                            className="glass-strong pointer-events-auto absolute right-0 bottom-[calc(100%+0.75rem)] w-52 overflow-hidden rounded-card p-1"
+                            className="glass-strong pointer-events-auto absolute right-0 bottom-[calc(100%+0.75rem)] w-max min-w-52 overflow-hidden rounded-card !bg-surface p-1"
                           >
                             {[
                               ...MORE_ITEMS,
@@ -126,11 +129,15 @@ export function TabBar() {
                                   role="menuitem"
                                   href={m.href}
                                   className={cx(
-                                    "flex min-h-tap items-center gap-3 rounded-control px-3 font-medium active:bg-fill",
+                                    "flex min-h-tap items-center gap-3 rounded-control px-3 pr-5 font-medium whitespace-nowrap active:bg-fill",
                                     isActive(pathname, m.href) && "text-accent",
                                   )}
                                 >
-                                  <m.Icon width="22" height="22" />
+                                  <m.Icon
+                                    width="22"
+                                    height="22"
+                                    className="shrink-0"
+                                  />
                                   {m.label}
                                 </Link>
                               </li>

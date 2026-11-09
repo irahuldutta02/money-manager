@@ -15,6 +15,7 @@ export function BottomSheet({
   title,
   children,
   footer,
+  subheader, // pinned under the title, outside the scrolling body
   tall = true,
   fixed = true, // false: size to content (only safe when nothing swaps in the footer)
   confirmClose = true, // false: no "discard changes?" prompt (non-form sheets)
@@ -148,6 +149,7 @@ export function BottomSheet({
           <CloseIcon />
         </button>
       </header>
+      {subheader ? <div className="shrink-0 px-4 pt-3">{subheader}</div> : null}
       <div
         ref={bodyRef}
         onPointerDownCapture={markInteraction}
