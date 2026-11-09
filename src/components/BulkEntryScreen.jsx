@@ -1,7 +1,36 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Minus, Pencil, Plus, Trash2, Check, ChevronDown } from "lucide-react";
+import {
+  Minus,
+  Pencil,
+  Plus,
+  Trash2,
+  Check,
+  ChevronDown,
+  GripVertical,
+} from "lucide-react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  restrictToParentElement,
+  restrictToVerticalAxis,
+} from "@dnd-kit/modifiers";
 import { Button } from "@/components/ui/Button";
 import { CategoryBadge } from "@/components/ui/CategoryBadge";
 import { BottomSheet } from "@/components/ui/BottomSheet";
@@ -20,6 +49,14 @@ import { currencySymbol, formatMoney, fromMinor, toMinor } from "@/lib/money";
 import { cx } from "@/lib/cx";
 
 const STORAGE_KEY = "mm:bulk-draft:v1";
+const ORDER_KEY = "mm:bulk-order:v1";
+function readOrder() {
+  try {
+    const o = JSON.parse(localStorage.getItem(ORDER_KEY));
+    if (o && typeof o === "object") return o;
+  } catch {}
+  return {};
+}
 const newId = () =>
   `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
 
@@ -145,6 +182,15 @@ function HistoryRow({ entry, currency, onChange, onDelete }) {
 
 function CategoryRow({ category, entries, currency, onAdd, onOpenHistory }) {
   const [text, setText] = useState("");
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: category.id });
   const net = netOf(entries);
 
   function add(sign) {
@@ -155,9 +201,31 @@ function CategoryRow({ category, entries, currency, onAdd, onOpenHistory }) {
   }
 
   return (
-    <div>
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(
+          transform && { ...transform, x: 0 }, // vertical only
+        ),
+        transition,
+      }}
+      className={cx(
+        "relative",
+        isDragging && "z-10 bg-surface shadow-2xl ring-1 ring-accent",
+      )}
+    >
       <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 lg:flex-col lg:items-stretch lg:gap-1.5 lg:py-2">
         <div className="flex min-w-0 items-center gap-3 sm:w-56 sm:shrink-0 lg:w-auto">
+          <button
+            type="button"
+            ref={setActivatorNodeRef}
+            {...attributes}
+            {...listeners}
+            aria-label={`Drag to reorder ${category.name}`}
+            className="-ml-2 flex h-9 w-6 shrink-0 cursor-grab touch-none items-center justify-center text-label-2 select-none active:cursor-grabbing"
+          >
+            <GripVertical size={16} />
+          </button>
           <CategoryBadge
             icon={category.icon}
             color={category.color}
@@ -283,8 +351,38 @@ export function BulkEntryScreen() {
   const [historyFor, setHistoryFor] = useState(null);
   const accountItems = liveAccounts.map((a) => ({ id: a.id, label: a.name }));
 
-  const expense = topCategories("expense");
-  const income = topCategories("income");
+  // Display order is a local preference (not part of the draft), synced
+  // between tabs; categories without a saved position keep their default order.
+  const [order, setOrder] = useState({});
+  useEffect(() => {
+    // localStorage is only readable after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOrder(readOrder());
+    const onStorage = (e) => e.key === ORDER_KEY && setOrder(readOrder());
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+  const ordered = (type) => {
+    const pos = new Map((order[type] ?? []).map((id, i) => [id, i]));
+    return topCategories(type)
+      .map((c, i) => [c, i])
+      .sort(
+        (a, b) =>
+          (pos.get(a[0].id) ?? 1e6) - (pos.get(b[0].id) ?? 1e6) || a[1] - b[1],
+      )
+      .map(([c]) => c);
+  };
+  const expense = ordered("expense");
+  const income = ordered("income");
   const byId = useMemo(
     () => new Map([...expense, ...income].map((c) => [c.id, c])),
     [expense, income],
@@ -366,24 +464,49 @@ export function BulkEntryScreen() {
     }
   }
 
-  const renderGroup = (header, list) =>
+  const reorder = (type, list, { active, over }) => {
+    if (!over || active.id === over.id) return;
+    const ids = list.map((c) => c.id);
+    const next = arrayMove(ids, ids.indexOf(active.id), ids.indexOf(over.id));
+    setOrder((o) => {
+      const merged = { ...o, [type]: next };
+      try {
+        localStorage.setItem(ORDER_KEY, JSON.stringify(merged));
+      } catch {}
+      return merged;
+    });
+  };
+
+  const renderGroup = (header, type, list) =>
     list.length === 0 ? null : (
       <div className="lg:min-h-0">
-        <ListGroup
-          header={header}
-          className="lg:mb-0 lg:flex lg:h-full lg:flex-col lg:[&>div:nth-child(2)]:min-h-0 lg:[&>div:nth-child(2)]:overflow-y-auto"
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+          onDragEnd={(e) => reorder(type, list, e)}
         >
-          {list.map((c) => (
-            <CategoryRow
-              key={c.id}
-              category={c}
-              currency={currency}
-              entries={entries[c.id] ?? []}
-              onAdd={(e) => patch(c.id, (l) => [...l, e])}
-              onOpenHistory={() => setHistoryFor(c.id)}
-            />
-          ))}
-        </ListGroup>
+          <ListGroup
+            header={header}
+            className="lg:mb-0 lg:flex lg:h-full lg:flex-col lg:[&>div:nth-child(2)]:min-h-0 lg:[&>div:nth-child(2)]:overflow-y-auto"
+          >
+            <SortableContext
+              items={list.map((c) => c.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {list.map((c) => (
+                <CategoryRow
+                  key={c.id}
+                  category={c}
+                  currency={currency}
+                  entries={entries[c.id] ?? []}
+                  onAdd={(e) => patch(c.id, (l) => [...l, e])}
+                  onOpenHistory={() => setHistoryFor(c.id)}
+                />
+              ))}
+            </SortableContext>
+          </ListGroup>
+        </DndContext>
       </div>
     );
 
@@ -423,8 +546,8 @@ export function BulkEntryScreen() {
         />
       ) : (
         <div className="lg:grid lg:min-h-0 lg:flex-1 lg:grid-cols-2 lg:gap-4">
-          {renderGroup("Expenses", expense)}
-          {renderGroup("Income", income)}
+          {renderGroup("Expenses", "expense", expense)}
+          {renderGroup("Income", "income", income)}
         </div>
       )}
 
