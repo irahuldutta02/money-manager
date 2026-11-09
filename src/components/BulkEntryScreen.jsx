@@ -490,22 +490,28 @@ export function BulkEntryScreen() {
       </BottomSheet>
 
       <div className="sticky bottom-[calc(env(safe-area-inset-bottom)+var(--spacing-tabbar))] z-20 lg:static lg:mt-3 lg:shrink-0">
-        <div className="space-y-2 rounded-card border border-separator bg-bg/90 p-3 shadow-lg backdrop-blur">
-          <div className="tabular flex justify-between text-[0.875rem] text-label-2">
-            <span>Expense {formatMoney(sum("expense"), currency)}</span>
-            <span>Income {formatMoney(sum("income"), currency)}</span>
+        <div className="flex flex-col gap-1.5 rounded-card border border-separator bg-bg/90 p-2 shadow-lg backdrop-blur sm:flex-row sm:items-center sm:gap-2 sm:pl-4">
+          <div className="tabular flex justify-between gap-3 px-2 text-[0.8125rem] leading-snug text-label-2 sm:block sm:min-w-0 sm:flex-1 sm:px-0">
+            <div className="truncate">
+              Expense {formatMoney(sum("expense"), currency)}
+            </div>
+            <div className="truncate">
+              Income {formatMoney(sum("income"), currency)}
+            </div>
           </div>
           <div className="flex gap-2">
             <Button
-              size="lg"
               variant="danger"
-              className="!w-auto"
               onClick={reset}
               disabled={saving || !hasEntries}
             >
               Reset
             </Button>
-            <Button size="lg" onClick={submit} loading={saving}>
+            <Button
+              onClick={submit}
+              loading={saving}
+              className="flex-1 whitespace-nowrap sm:flex-none"
+            >
               Add bulk entries
             </Button>
           </div>
