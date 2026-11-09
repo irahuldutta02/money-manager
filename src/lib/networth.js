@@ -675,6 +675,13 @@ export function cardIssuer(h) {
   return (v ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+/** A card's network (Visa, RuPay…), from its "network" detail row. */
+export function cardNetwork(h) {
+  return (
+    h.details?.find((r) => r.kind === "network" && r.value.trim())?.value ?? ""
+  );
+}
+
 /** A card's issuer logo, or one set on another card from the same issuer. */
 export function issuerIconFor(h, cards) {
   if (h.type !== "credit_card") return "";

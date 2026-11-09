@@ -48,7 +48,7 @@ import { apiFetch } from "@/lib/client/api";
 import { invalidateAll, useQuery } from "@/lib/client/query";
 import { useMeta } from "@/lib/client/meta";
 import { fromDateInput, toDateInput } from "@/lib/dates";
-import { cardLogoIcon, cardLogoUrl, fileToIcon } from "@/lib/client/image";
+import { cardLogoUrl, fileToIcon } from "@/lib/client/image";
 import { authClient } from "@/lib/auth-client";
 import { currencyDigits, formatMoney, fromMinor, toMinor } from "@/lib/money";
 import {
@@ -68,7 +68,7 @@ import {
   MAX_TENURE,
   cardGroupIds,
   cardIssuer,
-  badgeIconFor,
+  cardNetwork,
   fdBackers,
   issuerIconFor,
   platformIconFor,
@@ -148,29 +148,47 @@ function Switch({ on }) {
   );
 }
 
-/** The instrument's own logo if it has one, else its type icon. A card's
- * issuer logo rides on the corner as a small badge. */
-function HoldingBadge({ h, type, color, issuer }) {
-  const main = !h.icon ? (
+/** The instrument's own logo if it has one, else its type icon. A card shows
+ * its issuer logo, with the co-branding logo on the corner as a small badge;
+ * an FD shows its platform logo there. */
+function HoldingBadge({ h, type, color, all }) {
+  const card = h.type === "credit_card";
+  const mainSrc = card ? issuerIconFor(h, all) : h.icon;
+  const badge = card ? h.icon : platformIconFor(h, all);
+  const main = !mainSrc ? (
     <CategoryBadge icon={type.icon} color={color} />
   ) : (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={h.icon}
+      src={mainSrc}
       alt=""
       className="size-10 shrink-0 rounded-pill bg-fill object-cover"
     />
   );
-  if (!issuer) return main;
+  if (!badge) return main;
   return (
     <span className="relative inline-flex shrink-0">
       {main}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={issuer}
-        alt="Issuer"
+        src={badge}
+        alt={card ? "Co-branding" : "Platform"}
         className="absolute -right-1 -bottom-1 size-5 rounded-pill bg-white object-cover ring-2 ring-surface"
       />
+    </span>
+  );
+}
+
+/** A card's network (Visa, RuPay…): its logo and name, inline and quiet. */
+function NetworkBadge({ h }) {
+  const network = h.type === "credit_card" ? cardNetwork(h) : "";
+  const src = network ? cardLogoUrl(network) : "";
+  if (!src) return null;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" className="size-4 rounded-pill" />
+      {network}
     </span>
   );
 }
@@ -191,10 +209,11 @@ const FIELD_CLASS =
 /** The value input of a detail row, by its kind. */
 /** A small round logo for an account in a picker: its own icon, else its type's. */
 function AccountLogo({ h }) {
-  return h.icon ? (
+  const src = h.type === "credit_card" ? h.issuerIcon || h.icon : h.icon;
+  return src ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={h.icon}
+      src={src}
       alt=""
       className="size-7 shrink-0 rounded-pill bg-fill object-cover"
     />
@@ -1198,11 +1217,6 @@ function HoldingSheet({ state, holdings, onClose }) {
     setDetails((rows) =>
       rows.map((r) => (r.id === row.id ? { ...r, value: value ?? "" } : r)),
     );
-    if (row.kind === "network") {
-      try {
-        setIcon(await cardLogoIcon(value));
-      } catch {}
-    }
   }
 
   async function save() {
@@ -1391,25 +1405,42 @@ function HoldingSheet({ state, holdings, onClose }) {
           active={panel === "type"}
           onClick={() => setPanel((p) => (p === "type" ? false : "type"))}
         />
-        <IconPicker
-          label="Icon"
-          value={icon}
-          onChange={setIcon}
-          onError={setError}
-          onOpen={() => setPanel(false)}
-          fallback={
-            <CategoryBadge
-              icon={t.icon}
-              color={nwGroup(t.group).color}
-              size="lg"
+        {type === "credit_card" ? (
+          <>
+            <IconPicker
+              label="Issuer logo"
+              value={issuerIcon}
+              onChange={setIssuerIcon}
+              onError={setError}
+              onOpen={() => setPanel(false)}
+              fallback={
+                <CategoryBadge
+                  icon={t.icon}
+                  color={nwGroup(t.group).color}
+                  size="lg"
+                />
+              }
             />
-          }
-        />
-        {type === "credit_card" && (
+            <IconPicker
+              label="Co-branding logo"
+              value={icon}
+              onChange={setIcon}
+              onError={setError}
+              onOpen={() => setPanel(false)}
+              fallback={
+                <CategoryBadge
+                  icon={t.icon}
+                  color={nwGroup(t.group).color}
+                  size="lg"
+                />
+              }
+            />
+          </>
+        ) : (
           <IconPicker
-            label="Issuer logo"
-            value={issuerIcon}
-            onChange={setIssuerIcon}
+            label="Icon"
+            value={icon}
+            onChange={setIcon}
             onError={setError}
             onOpen={() => setPanel(false)}
             fallback={
@@ -2281,7 +2312,7 @@ function BalanceSheet({ state, holdings, onClose, onEdit, onClone, onEmi }) {
           h={holding}
           type={type}
           color={group.color}
-          issuer={badgeIconFor(holding, holdings)}
+          all={holdings}
         />
         <span
           className={cx(
@@ -2708,20 +2739,25 @@ function HoldingRow({ h, all, onClick }) {
               h={h}
               type={type}
               color={group.color}
-              issuer={badgeIconFor(h, all)}
+              all={all}
             />
             <span className="min-w-0 flex-1">
               <span className="block text-[1.0625rem] leading-snug break-words">
                 {h.name}
+              </span>
+              <span className="mt-0.5 flex text-[0.75rem] text-label-2">
+                <NetworkBadge h={h} />
+              </span>
+            </span>
+            <span className="shrink-0 text-right">
+              <span className="tabular block text-[1.0625rem] font-semibold">
+                {formatMoney(h.balance, currency)}
               </span>
               {at && (
                 <span className="block text-[0.75rem] text-label-2">
                   <AsOn iso={at} />
                 </span>
               )}
-            </span>
-            <span className="tabular shrink-0 text-[1.0625rem] font-semibold">
-              {formatMoney(h.balance, currency)}
             </span>
           </span>
           {usage && (
@@ -2791,7 +2827,7 @@ function HoldingRow({ h, all, onClick }) {
         h={h}
         type={type}
         color={group.color}
-        issuer={badgeIconFor(h, all)}
+        all={all}
       />
       {/* Phone: stacked. Large screens: one line (name, type, balance). */}
       <span className="min-w-0 flex-1 lg:grid lg:grid-cols-[1fr_14rem] lg:gap-x-4">
@@ -2802,6 +2838,9 @@ function HoldingRow({ h, all, onClick }) {
           )}
         >
           {h.name}
+          <span className="ml-2 align-middle text-[0.75rem] font-normal text-label-2">
+            <NetworkBadge h={h} />
+          </span>
           {!h.included && (
             <span className="ml-2 rounded-pill bg-fill px-2 py-0.5 text-[0.75rem] font-semibold whitespace-nowrap text-label-2">
               Not counted
