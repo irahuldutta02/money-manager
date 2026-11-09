@@ -16,7 +16,9 @@ import {
   MAX_EMIS,
   emiError,
   NW_TYPE_IDS,
+  SINGLE_TYPES,
   detailRows,
+  nwType,
   normLabel,
   rowKind,
 } from "@/lib/networth";
@@ -63,12 +65,16 @@ export function cleanEmis(raw) {
   if (raw.length > MAX_EMIS) {
     throw new ApiError(400, `At most ${MAX_EMIS} EMIs`);
   }
-  const names = new Set();
   return raw.map((e) => {
     if (!e || typeof e !== "object") throw new ApiError(400, "emis is invalid");
     const emi = {
       id: str(e.id ?? newId(), "emi id", { max: 40 }),
       name: typeof e.name === "string" ? e.name.trim() : "",
+      ...(e.icon && { icon: iconImage(e.icon) }),
+      ...(typeof e.purpose === "string" &&
+        e.purpose.trim() && {
+          purpose: str(e.purpose.trim(), "EMI for", { max: 80 }),
+        }),
       principal: e.principal,
       monthly: e.monthly,
       tenure: e.tenure,
@@ -81,10 +87,6 @@ export function cleanEmis(raw) {
       throw new ApiError(400, "An EMI amount is too large");
     const err = emiError(emi);
     if (err) throw new ApiError(400, err);
-    const key = emi.name.toLowerCase();
-    if (names.has(key))
-      throw new ApiError(400, `Another EMI is already called "${emi.name}"`);
-    names.add(key);
     if (emi.custom)
       emi.custom = emi.custom.map((c) => ({
         principal: c.principal,
@@ -114,6 +116,9 @@ function parseFields(body, { partial, currentType }) {
   }
   if (body.emis !== undefined) {
     out.emis = cleanEmis(body.emis);
+  }
+  if (body.total !== undefined) {
+    out.total = body.total === true;
   }
   if (!partial || body.platformIcon !== undefined) {
     out.platformIcon = iconImage(body.platformIcon);
@@ -172,8 +177,25 @@ export async function getNetWorth(userId) {
   };
 }
 
+/** There is one EPF and one NPS account; employers and tiers are rows inside. */
+async function assertSingleEpf(userId, type, exceptId) {
+  if (!SINGLE_TYPES.includes(type)) return;
+  const other = await col("holdings").findOne({
+    userId,
+    type,
+    deletedAt: null,
+    ...(exceptId && { _id: { $ne: exceptId } }),
+  });
+  if (other)
+    throw new ApiError(
+      400,
+      `You already have an ${nwType(type).label} account. Keep everything in that one.`,
+    );
+}
+
 export async function createHolding(userId, body) {
   const f = parseFields(body, { partial: false });
+  await assertSingleEpf(userId, f.type);
   const balance = bal(body.balance ?? 0);
   const last = await col("holdings")
     .find({ userId })
@@ -220,6 +242,7 @@ export async function updateHolding(userId, holdingId, body) {
     currentType = cur.type;
   }
   const f = parseFields(body, { partial: true, currentType });
+  await assertSingleEpf(userId, f.type, holdingId);
   const now = new Date();
   const update = { $set: { ...f, updatedAt: now } };
   if (body.history !== undefined) {

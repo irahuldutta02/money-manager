@@ -1,5 +1,6 @@
 "use client";
-import { Check } from "lucide-react";
+import { useState } from "react";
+import { Check, Search } from "lucide-react";
 import { cx } from "@/lib/cx";
 
 const Chevron = ({ className }) => (
@@ -66,6 +67,9 @@ export function PickerField({
   );
 }
 
+// Long lists get a search box.
+const SEARCH_FROM = 7;
+
 /**
  * Option list shown where the number pad shows (bottom panel).
  * options: [{ id, label, leading? }]
@@ -78,6 +82,12 @@ export function OptionPanel({
   onPick,
   onClose,
 }) {
+  const [query, setQuery] = useState("");
+  const searchable = options.length >= SEARCH_FROM;
+  const q = query.trim().toLowerCase();
+  const shown = q
+    ? options.filter((o) => String(o.label).toLowerCase().includes(q))
+    : options;
   const rowBase =
     "flex min-h-tap w-full items-center gap-2 rounded-control px-3 text-left active:bg-fill";
   return (
@@ -94,12 +104,34 @@ export function OptionPanel({
           Close
         </button>
       </div>
+      {searchable && (
+        <label className="mb-1.5 flex min-h-tap items-center gap-2 rounded-control bg-fill px-3 focus-within:bg-accent-soft">
+          <Search
+            aria-hidden
+            size={18}
+            strokeWidth={2.4}
+            className="shrink-0 text-label-2"
+          />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={`Search ${title.toLowerCase()}`}
+            aria-label={`Search ${title}`}
+            autoFocus={
+              typeof window !== "undefined" &&
+              window.matchMedia("(pointer: fine)").matches
+            }
+            className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-label-2"
+          />
+        </label>
+      )}
       <ul
         role="listbox"
         aria-label={title}
         className="h-[15.5rem] overflow-y-auto overscroll-contain rounded-control bg-fill/60 p-1"
       >
-        {clearLabel && (
+        {clearLabel && !q && (
           <li role="presentation">
             <button
               type="button"
@@ -112,12 +144,12 @@ export function OptionPanel({
             </button>
           </li>
         )}
-        {options.length === 0 && (
+        {shown.length === 0 && (
           <li className="px-3 py-6 text-center text-label-2">
-            Nothing to choose yet.
+            {q ? "No matches." : "Nothing to choose yet."}
           </li>
         )}
-        {options.map((o) => {
+        {shown.map((o) => {
           const active = o.id === value;
           return (
             <li key={o.id} role="presentation">

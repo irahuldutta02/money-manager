@@ -230,6 +230,7 @@ export function validateBackup(data, userId) {
         icon: iconImage(r.icon),
         issuerIcon: iconImage(r.issuerIcon),
         platformIcon: iconImage(r.platformIcon),
+        ...(r.total === true && { total: true }),
         emis: cleanEmis(r.emis),
         details: cleanDetails(oneOf(r.type, "type", NW_TYPE_IDS), r.details),
         balance,

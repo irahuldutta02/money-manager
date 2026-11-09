@@ -5,8 +5,10 @@ import {
   cardEmis,
   formatDetailValue,
   holdingValue,
+  issuerIconFor,
   netWorthTotals,
   nwType,
+  platformIconFor,
 } from "@/lib/networth";
 
 // Builds the "handover" PDF in the browser (jsPDF is loaded on demand, so it
@@ -18,6 +20,32 @@ const GREY = [110, 110, 115];
 const INK = [20, 20, 24];
 const GREEN = [24, 140, 70];
 const RED = [200, 40, 40];
+
+/** Draws a data-URL logo as a circle with a thin border; unreadable ones are skipped. */
+function drawLogo(doc, src, x, y, size) {
+  const fmt = /^data:image\/(\w+);/.exec(src ?? "")?.[1];
+  if (!fmt) return false;
+  const r = size / 2;
+  const cx = x + r;
+  const cy = y + r;
+  try {
+    doc.saveGraphicsState();
+    doc.setFillColor(255, 255, 255);
+    doc.circle(cx, cy, r, "F");
+    doc.circle(cx, cy, r, null);
+    doc.clip();
+    doc.discardPath();
+    doc.addImage(src, fmt.toUpperCase(), x, y, size, size);
+    doc.restoreGraphicsState();
+    doc.setDrawColor(205, 205, 212);
+    doc.setLineWidth(0.25);
+    doc.circle(cx, cy, r, "S");
+    return true;
+  } catch {
+    doc.restoreGraphicsState();
+    return false;
+  }
+}
 
 const dateText = (d) =>
   new Intl.DateTimeFormat("en-GB", {
@@ -132,6 +160,7 @@ export async function downloadNetWorthPdf(input) {
             : r.kind === "account"
               ? {
                   ...r,
+                  kind: undefined,
                   value: holdings.find((c) => c.id === r.value)?.name ?? "",
                 }
               : r,
@@ -140,6 +169,7 @@ export async function downloadNetWorthPdf(input) {
           r.kind === "linkcard"
             ? {
                 ...r,
+                kind: undefined,
                 value: r.value
                   .split(",")
                   .map((id) => holdings.find((c) => c.id === id)?.name)
@@ -151,7 +181,8 @@ export async function downloadNetWorthPdf(input) {
         .filter((r) => r.value)
         .concat(
           cardEmis(x).list.map((e) => ({
-            label: `EMI: ${e.name}`.toUpperCase(),
+            label:
+              `EMI: ${e.purpose ? `${e.name} - ${e.purpose}` : e.name}`.toUpperCase(),
             value: e.active
               ? `${money(e.monthly)}/mo, ${e.remaining} of ${e.tenure} left, ${money(e.payable)} payable`
               : "Completed",
@@ -159,33 +190,54 @@ export async function downloadNetWorthPdf(input) {
         );
       const wrapped = pairs.map((p) => ({
         ...p,
-        lines: doc.splitTextToSize(formatDetailValue(p), cw - 62),
+        lines: doc.splitTextToSize(formatDetailValue(p, { holdings }), cw - 62),
       }));
       const need =
         11 + wrapped.reduce((n, p) => n + p.lines.length * 4.3 + 1, 0) + 4;
       ensure(Math.min(need, 60));
 
+      // Logos: a card shows its issuer logo with the co-branding one beside
+      // it; others show their own, with the platform's next to it.
+      const card = x.type === "credit_card";
+      const logos = [
+        card ? issuerIconFor(x, holdings) : x.icon,
+        card ? x.icon : platformIconFor(x, holdings),
+      ].filter(Boolean);
+      let tx = m;
+      for (const src of logos) {
+        if (drawLogo(doc, src, tx, y, 7)) tx += 8.5;
+      }
+      const startY = y;
+
       font("bold", 11);
       color(INK);
-      const title = doc.splitTextToSize(x.name, cw - 48);
-      doc.text(title, m, y + 4);
+      const title = doc.splitTextToSize(x.name, cw - 48 - (tx - m));
+      doc.text(title, tx, y + 4);
       doc.text(money(x.balance), w - m, y + 4, { align: "right" });
       y += title.length * 4.8 + 0.4;
 
+      // Deposits show what went in and what it earned; an NPS, its tiers.
+      const base =
+        x.autoBalance && x.principal > 0
+          ? `${x.type === "rd" ? "invested" : "deposit"} ${money(x.principal)}, ${x.gain >= 0 ? "gain" : "loss"} ${money(Math.abs(x.gain))}`
+          : "";
       font("normal", 8.5);
       color(GREY);
       doc.text(
         [
           type.label,
+          base,
+          x.type === "mf" && x.total ? "total balance (all AMCs)" : "",
           last ? `as on ${dateText(new Date(last.at))}` : "",
           x.included ? "" : "not counted in totals",
         ]
           .filter(Boolean)
           .join("  ·  "),
-        m,
+        tx,
         y + 3,
       );
       y += 6;
+      y = Math.max(y, startY + 8);
 
       for (const p of wrapped) {
         ensure(p.lines.length * 4.3 + 2);

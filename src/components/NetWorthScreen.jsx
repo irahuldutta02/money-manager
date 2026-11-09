@@ -25,6 +25,7 @@ import {
 import {
   Check,
   ChevronDown,
+  CreditCard,
   Download,
   GripVertical,
   Link2,
@@ -56,8 +57,14 @@ import {
   cardEmis,
   cardInfo,
   fdMaturity,
-  fdPrincipal,
-  fdValueNow,
+  rdMaturity,
+  depositPrincipal,
+  depositValueNow,
+  npsTiers,
+  mfNumberLabel,
+  MF_ACCOUNT_KINDS,
+  MF_DEPOSITORY,
+  SINGLE_TYPES,
   rowOptions,
   emiError,
   noInterestEmi,
@@ -201,6 +208,37 @@ const newRow = (label = "", value = "", kind) => ({
   ...(kind && { kind }),
 });
 const toEditRows = (rows) => rows.map((r) => newRow(r.label, r.value, r.kind));
+
+/**
+ * A mutual fund's rows follow its account type and "total balance" switch: an
+ * SOA has an AMC row (unless the balance covers every AMC), a demat account
+ * has a depository instead, and the number row is a folio or demat number.
+ */
+function adjustMfRows(rows, kind, total) {
+  const number = (r) => /^(folio|demat|account)\b.*number$/i.test(r.label);
+  const isAmc = (r) => /^amc\b/i.test(r.label);
+  const isDepo = (r) => /^depository/i.test(r.label);
+  const demat = kind === "Demat";
+  let out = rows
+    .filter((r) => !(isAmc(r) && (demat || total)))
+    .filter((r) => !(isDepo(r) && !demat))
+    .map((r) =>
+      number(r) ? { ...r, label: mfNumberLabel(kind).toUpperCase() } : r,
+    );
+  const add = (row) => {
+    const at = out.findIndex(number);
+    const next = [...out];
+    next.splice(at < 0 ? next.length : at, 0, row);
+    out = next;
+  };
+  if (!demat && !total && !out.some(isAmc)) add(newRow("AMC"));
+  if (demat && !out.some(isDepo))
+    add(newRow(MF_DEPOSITORY.label.toUpperCase(), "", "choice"));
+  return out;
+}
+const mfKindOf = (rows) =>
+  rows.find((r) => /^account type/i.test(r.label))?.value ||
+  MF_ACCOUNT_KINDS[0];
 
 const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1));
 const FIELD_CLASS =
@@ -569,37 +607,6 @@ function DetailFields({
       )}
     </div>
   );
-}
-
-const ISSUER_LABEL =
-  /bank|platform|broker|issuer|lender|insurer|employer|scheme|exchange|amc|custodian/i;
-
-const NUMBER_LABEL =
-  /account|card|policy|demat|pran|uan|folio|number|digit|id\b/i;
-const NOT_NUMBER = /cus|cif|ifsc|nominee|branch|bank|name/i;
-
-/** e.g. "ICICI BANK - 7877": provider plus the last 4 digits of its number. */
-function suggestName(type, rows) {
-  const row = rows.find((r) => r.value.trim() && ISSUER_LABEL.test(r.label));
-  if (!row) return "";
-  const who = row.value.trim();
-  const num = rows.find(
-    (r) =>
-      r !== row &&
-      NUMBER_LABEL.test(r.label) &&
-      !NOT_NUMBER.test(r.label) &&
-      r.value.replace(/\D/g, "").length > 0,
-  );
-  const variant = rows
-    .find((r) => /variant/i.test(r.label) && r.value.trim())
-    ?.value.trim();
-  const head = variant ? `${who} ${variant}` : who;
-  if (num) return `${head} - ${num.value.replace(/\D/g, "").slice(-4)}`;
-  if (variant) return head;
-  const kind = nwType(type).label.replace(/ account$/i, "");
-  return who.toLowerCase().includes(kind.toLowerCase())
-    ? who
-    : `${who} ${kind}`;
 }
 
 const TYPE_OPTIONS = NW_TYPES.map((t) => ({
@@ -1065,6 +1072,7 @@ function HoldingSheet({ state, holdings, onClose }) {
   const [balance, setBalance] = useState("");
   const [included, setIncluded] = useState(base?.included ?? true);
   const [icon, setIcon] = useState(base?.icon ?? "");
+  const [total, setTotal] = useState(Boolean(base?.total));
   const [issuerIcon, setIssuerIcon] = useState(
     base ? issuerIconFor(base, holdings) : "",
   );
@@ -1095,7 +1103,6 @@ function HoldingSheet({ state, holdings, onClose }) {
   const t = nwType(type);
   const liability = t.group === "liability";
 
-  const suggestion = suggestName(type, details);
   // Other credit cards this one can share a limit with.
   const otherCards = holdings.filter(
     (x) => x.type === "credit_card" && x.id !== h?.id,
@@ -1142,20 +1149,32 @@ function HoldingSheet({ state, holdings, onClose }) {
           h.balance)
         : toMinor(Number(balance) || 0, currency);
   const autoMaturity =
-    type === "fd"
-      ? fdMaturity({
-          principal: principalMinor,
+    type === "rd"
+      ? rdMaturity({
+          installment: toMinor(
+            Number(rowVal(/installment(?! day)/i)) || 0,
+            currency,
+          ),
           rate: rowVal(null, "rate"),
-          deposit: rowVal(/date of deposit|deposit date/i),
+          start: rowVal(/start date/i),
+          day: rowVal(/installment day/i),
           maturity: rowVal(/maturity date/i),
           compounding: rowVal(/compounding/i) || "Quarterly",
         })
-      : null;
+      : type === "fd"
+        ? fdMaturity({
+            principal: principalMinor,
+            rate: rowVal(null, "rate"),
+            deposit: rowVal(/date of deposit|deposit date/i),
+            maturity: rowVal(/maturity date/i),
+            compounding: rowVal(/compounding/i) || "Quarterly",
+          })
+        : null;
   const autoText =
     autoMaturity == null ? "" : String(fromMinor(autoMaturity, currency));
   const lastAuto = useRef(autoText);
   useEffect(() => {
-    if (type !== "fd") return;
+    if (type !== "fd" && type !== "rd") return;
     const row = details.find(
       (r) => r.kind === "amount" && /maturity/i.test(r.label),
     );
@@ -1170,6 +1189,28 @@ function HoldingSheet({ state, holdings, onClose }) {
       );
     }
   }, [autoText, type, details]);
+
+  // A PPF matures 15 years after it was opened; the date follows the opening
+  // date until it is typed over (clearing it brings the calculated one back).
+  const ppfOpening = type === "ppf" ? rowVal(/opening date/i) : "";
+  const ppfMaturity = /^\d{4}-\d{2}-\d{2}$/.test(ppfOpening)
+    ? `${Number(ppfOpening.slice(0, 4)) + 15}${ppfOpening.slice(4).replace("02-29", "02-28")}`
+    : "";
+  const lastPpf = useRef(ppfMaturity);
+  useEffect(() => {
+    if (type !== "ppf") return;
+    const row = details.find((r) => /^maturity date/i.test(r.label));
+    if (!row || row.value === ppfMaturity) {
+      lastPpf.current = ppfMaturity;
+      return;
+    }
+    if (row.value === "" || row.value === lastPpf.current) {
+      lastPpf.current = ppfMaturity;
+      setDetails((rows) =>
+        rows.map((r) => (r.id === row.id ? { ...r, value: ppfMaturity } : r)),
+      );
+    }
+  }, [ppfMaturity, type, details]);
 
   const panelRow = panel?.row ? details.find((r) => r.id === panel.row) : null;
 
@@ -1214,9 +1255,15 @@ function HoldingSheet({ state, holdings, onClose }) {
       (value == null && row.kind !== "linkcard" && row.kind !== "account")
     )
       return;
-    setDetails((rows) =>
-      rows.map((r) => (r.id === row.id ? { ...r, value: value ?? "" } : r)),
-    );
+    // A mutual fund's account type reshapes its rows.
+    const mfKind =
+      type === "mf" && row.kind === "choice" && /account type/i.test(row.label);
+    setDetails((rows) => {
+      const next = rows.map((r) =>
+        r.id === row.id ? { ...r, value: value ?? "" } : r,
+      );
+      return mfKind ? adjustMfRows(next, value, total) : next;
+    });
   }
 
   async function save() {
@@ -1240,7 +1287,10 @@ function HoldingSheet({ state, holdings, onClose }) {
         included,
         icon,
         issuerIcon: type === "credit_card" ? issuerIcon : "",
-        platformIcon: type === "fd" ? platformIcon : "",
+        platformIcon: ["fd", "mf", "stocks", "bonds"].includes(type)
+          ? platformIcon
+          : "",
+        ...(type === "mf" && { total }),
         details: details.map((r) => ({
           label: r.label,
           value: r.value,
@@ -1253,11 +1303,33 @@ function HoldingSheet({ state, holdings, onClose }) {
         body.balance =
           type === "fd"
             ? toMinor(Number(rowVal(/deposit amount/i)) || 0, currency)
-            : toMinor(parsed, currency);
+            : type === "rd"
+              ? toMinor(Number(rowVal(/installment(?! day)/i)) || 0, currency)
+              : type === "nps"
+                ? (npsTiers({ type, details }, currency)?.total ?? 0)
+                : toMinor(parsed, currency);
       await apiFetch(h ? `/api/networth/${h.id}` : "/api/networth", {
         method: h ? "PATCH" : "POST",
         body,
       });
+      // NPS: the overall balance is the sum of its tiers, and every change
+      // to it is kept as a balance entry.
+      const tiers =
+        type === "nps" ? npsTiers({ type, details }, currency) : null;
+      if (h && tiers && tiers.total !== h.balance) {
+        await apiFetch(`/api/networth/${h.id}`, {
+          method: "PATCH",
+          body: {
+            history: [
+              ...(h.history ?? []).map((e) => ({
+                at: e.at,
+                balance: e.balance,
+              })),
+              { at: new Date().toISOString(), balance: tiers.total },
+            ],
+          },
+        });
+      }
       // Cards taken out of the group are cut loose from every remaining
       // member (their own list, and the members' lists), so the link is gone
       // from both sides even when they were chained through another card.
@@ -1344,7 +1416,11 @@ function HoldingSheet({ state, holdings, onClose }) {
           {panel === "type" && (
             <OptionPanel
               title="Type"
-              options={TYPE_OPTIONS}
+              options={TYPE_OPTIONS.filter(
+                (o) =>
+                  !SINGLE_TYPES.includes(o.id) ||
+                  !holdings.some((x) => x.type === o.id && x.id !== h?.id),
+              )}
               value={type}
               onPick={(v) => {
                 if (v) {
@@ -1438,7 +1514,15 @@ function HoldingSheet({ state, holdings, onClose }) {
           </>
         ) : (
           <IconPicker
-            label="Icon"
+            label={
+              type === "stocks" || type === "bonds"
+                ? "Depository logo"
+                : type === "mf"
+                  ? mfKindOf(details) === "Demat" || total
+                    ? "Depository logo"
+                    : "AMC logo"
+                  : "Icon"
+            }
             value={icon}
             onChange={setIcon}
             onError={setError}
@@ -1452,7 +1536,7 @@ function HoldingSheet({ state, holdings, onClose }) {
             }
           />
         )}
-        {type === "fd" && (
+        {["fd", "mf", "stocks", "bonds"].includes(type) && (
           <IconPicker
             label="Platform logo"
             value={platformIcon}
@@ -1481,18 +1565,7 @@ function HoldingSheet({ state, holdings, onClose }) {
               : "e.g. SBI savings, Nifty 50 fund"
           }
         />
-        {suggestion && suggestion !== name.trim() && (
-          <div className="!mt-1.5 flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => setName(suggestion)}
-              className="flex min-h-9 items-center rounded-pill bg-accent-soft px-3 text-[0.875rem] font-medium text-accent"
-            >
-              {suggestion}
-            </button>
-          </div>
-        )}
-        {!h && type !== "fd" && (
+        {!h && type !== "fd" && type !== "rd" && type !== "nps" && (
           <TextInput
             id="nw-balance"
             label={`${liability ? "Outstanding" : "Current balance"} (${currency})`}
@@ -1517,6 +1590,26 @@ function HoldingSheet({ state, holdings, onClose }) {
             trailing={<Switch on={included} />}
           />
         </ListGroup>
+        {type === "mf" && (
+          <ListGroup className="!mt-4 !mb-0">
+            <ListRow
+              role="switch"
+              aria-checked={total}
+              onClick={() => {
+                const next = !total;
+                setTotal(next);
+                setDetails((rows) => adjustMfRows(rows, mfKindOf(rows), next));
+              }}
+              title="Total balance"
+              subtitle={
+                total
+                  ? "Covers all AMCs in this account"
+                  : "Balance of a single AMC"
+              }
+              trailing={<Switch on={total} />}
+            />
+          </ListGroup>
+        )}
         <DetailFields
           type={type}
           rows={details}
@@ -1537,6 +1630,27 @@ function HoldingSheet({ state, holdings, onClose }) {
 
 // ----------------------------------------------------------------- card EMIs
 
+/** "Platform - what it was for", or just the name. */
+const emiTitle = (e) => (e.purpose ? `${e.name} - ${e.purpose}` : e.name);
+
+/** An EMI's own logo (e.g. the merchant's), else the loan icon. */
+function EmiLogo({ emi, color = "red", size }) {
+  return emi.icon ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={emi.icon}
+      alt=""
+      className={cx(
+        "shrink-0 rounded-pill bg-fill object-cover",
+        size === "lg" ? "size-14" : "size-10",
+        color === "gray" && "opacity-60",
+      )}
+    />
+  ) : (
+    <CategoryBadge icon="hand-coins" color={color} size={size} />
+  );
+}
+
 /** A card's EMIs / loans: open ones with a way to add more, finished ones below. */
 function EmiList({ holding, currency, onOpen }) {
   const { list, monthly } = cardEmis(holding);
@@ -1556,7 +1670,8 @@ function EmiList({ holding, currency, onOpen }) {
           <ListRow
             key={e.id}
             onClick={() => onOpen(e.id)}
-            title={e.name}
+            leading={<EmiLogo emi={e} />}
+            title={emiTitle(e)}
             subtitle={`${formatMoney(e.monthly, currency)}/mo · ${e.paid} of ${e.tenure} paid · next ${dayMonth(e.nextAt)}`}
             trailing={
               <span className="text-right">
@@ -1591,7 +1706,8 @@ function EmiList({ holding, currency, onOpen }) {
             <ListRow
               key={e.id}
               onClick={() => onOpen(e.id)}
-              title={e.name}
+              leading={<EmiLogo emi={e} color="gray" />}
+              title={emiTitle(e)}
               subtitle={`${formatMoney(e.principal, currency)} · ${e.tenure} instalments`}
               trailing={
                 <span className="flex items-center gap-1 text-[0.875rem] font-medium text-label-2">
@@ -1730,6 +1846,8 @@ function EmiSheet({ state, holding, onClose }) {
   const toText = (v) => String(fromMinor(v, currency));
 
   const [name, setName] = useState(emi?.name ?? "");
+  const [icon, setIcon] = useState(emi?.icon ?? "");
+  const [purpose, setPurpose] = useState(emi?.purpose ?? "");
   const [principal, setPrincipal] = useState(emi ? toText(emi.principal) : "");
   const [monthly, setMonthly] = useState(emi ? toText(emi.monthly) : "");
   const [tenure, setTenure] = useState(emi ? String(emi.tenure) : "");
@@ -1749,6 +1867,8 @@ function EmiSheet({ state, holding, onClose }) {
   // Anything typed since the form opened asks before it is thrown away.
   const formState = JSON.stringify({
     name,
+    icon,
+    purpose,
     principal,
     monthly,
     tenure,
@@ -1836,16 +1956,12 @@ function EmiSheet({ state, holding, onClose }) {
     setError(null);
     if (!Number.isFinite(P) || !Number.isFinite(M))
       return setError("Enter the amounts as numbers.");
-    const dup = list.find(
-      (e) =>
-        e.id !== emi?.id &&
-        e.name.trim().toLowerCase() === name.trim().toLowerCase(),
-    );
-    if (dup) return setError(`Another EMI is already called "${dup.name}".`);
     const item = {
       ...draft,
       id: emi?.id ?? crypto.randomUUID(),
       name: name.trim(),
+      icon,
+      purpose: purpose.trim(),
       start: fromDateInput(
         start,
         emi ? new Date(emi.start) : null,
@@ -1902,6 +2018,14 @@ function EmiSheet({ state, holding, onClose }) {
       }
     >
       <div className="space-y-2.5 pt-2">
+        <IconPicker
+          label="Icon"
+          value={icon}
+          onChange={setIcon}
+          onError={setError}
+          onOpen={() => {}}
+          fallback={<CategoryBadge icon="hand-coins" color="red" size="lg" />}
+        />
         <TextInput
           id="emi-name"
           label="Name"
@@ -1910,6 +2034,14 @@ function EmiSheet({ state, holding, onClose }) {
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. iPhone EMI"
           autoFocus
+        />
+        <TextInput
+          id="emi-purpose"
+          label="EMI for"
+          value={purpose}
+          maxLength={80}
+          onChange={(e) => setPurpose(e.target.value)}
+          placeholder="What it was bought for, e.g. iPhone 16, groceries"
         />
         <TextInput
           id="emi-principal"
@@ -2021,6 +2153,8 @@ const emisBody = (next) => ({
   emis: next.map((e) => ({
     id: e.id,
     name: e.name,
+    icon: e.icon,
+    purpose: e.purpose,
     principal: e.principal,
     monthly: e.monthly,
     tenure: e.tenure,
@@ -2097,7 +2231,7 @@ function EmiViewSheet({ state, holding, onClose, onEdit }) {
       open={state.open && Boolean(emi)}
       onClose={onClose}
       confirmClose={false}
-      title={cur.name}
+      title={emiTitle(cur)}
       footer={
         <div className="grid grid-cols-2 gap-2">
           <Button size="lg" variant="tinted" onClick={() => onEdit(cur.id)}>
@@ -2114,7 +2248,7 @@ function EmiViewSheet({ state, holding, onClose, onEdit }) {
       }
     >
       <div className="flex flex-col items-center pt-2 pb-4 text-center">
-        <CategoryBadge icon="hand-coins" color="red" size="lg" />
+        <EmiLogo emi={cur} size="lg" />
         <p className="mt-3 text-[0.8125rem] font-medium tracking-wide text-label-2 uppercase">
           Outstanding
         </p>
@@ -2223,16 +2357,18 @@ function periodText(from, to) {
 }
 
 /** What an FD pays at maturity, and over what period, from its detail rows. */
-function fdSummary(rows) {
+function fdSummary(rows, type = "fd") {
   const get = (re, kind) =>
     rows.find((r) => (kind ? r.kind === kind : re.test(r.label)))?.value ?? "";
   const day = (v) =>
     /^\d{4}-\d{2}-\d{2}$/.test(v) ? new Date(`${v}T00:00:00`) : null;
   const date = day(get(/maturity date/i));
-  const from = day(get(/date of deposit|deposit date/i));
+  const rd = type === "rd";
+  const from = day(get(rd ? /start date/i : /date of deposit|deposit date/i));
   const amount = Number(get(/maturity amount/i));
-  const deposit = Number(get(/deposit amount/i));
+  const deposit = Number(get(rd ? /installment(?! day)/i : /deposit amount/i));
   return {
+    rd,
     rate: get(null, "rate"),
     date,
     from,
@@ -2271,7 +2407,12 @@ function BalanceSheet({ state, holdings, onClose, onEdit, onClone, onEmi }) {
     : null;
   const allRows = detailRows(holding.type, holding.details);
   const detailList = allRows.filter((r) => r.value && r.kind !== "linkcard");
-  const fd = holding.type === "fd" ? fdSummary(allRows) : null;
+  // NPS: Tier 1 + Tier 2 make the overall balance; it changes by editing them.
+  const tiers = npsTiers(holding, currency);
+  const fd =
+    holding.type === "fd" || holding.type === "rd"
+      ? fdSummary(allRows, holding.type)
+      : null;
 
   return (
     <BottomSheet
@@ -2283,7 +2424,7 @@ function BalanceSheet({ state, holdings, onClose, onEdit, onClone, onEmi }) {
         <div
           className={cx(
             "grid gap-2",
-            holding.autoBalance
+            holding.autoBalance || tiers
               ? "grid-cols-[auto_1fr]"
               : "grid-cols-[auto_1fr_1fr]",
           )}
@@ -2299,7 +2440,7 @@ function BalanceSheet({ state, holdings, onClose, onEdit, onClone, onEmi }) {
           <Button size="lg" variant="tinted" onClick={() => onEdit(holding.id)}>
             Edit
           </Button>
-          {!holding.autoBalance && (
+          {!holding.autoBalance && !tiers && (
             <Button size="lg" onClick={() => openEntry()}>
               Add entry
             </Button>
@@ -2327,7 +2468,9 @@ function BalanceSheet({ state, holdings, onClose, onEdit, onClone, onEmi }) {
             ? "Outstanding"
             : holding.autoBalance
               ? "Current value"
-              : "Current balance"}
+              : tiers
+                ? "Overall balance"
+                : "Current balance"}
         </p>
         <p className="tabular text-[2.25rem] leading-tight font-bold tracking-tight">
           {formatMoney(holding.balance, currency)}
@@ -2345,6 +2488,12 @@ function BalanceSheet({ state, holdings, onClose, onEdit, onClone, onEmi }) {
               {" "}
               ({((holding.gain / holding.principal) * 100).toFixed(2)}%)
             </span>
+          </p>
+        )}
+        {tiers && (
+          <p className="tabular mt-1 text-[0.875rem] text-label-2">
+            Tier 1 {formatMoney(tiers.one, currency)} · Tier 2{" "}
+            {formatMoney(tiers.two, currency)}
           </p>
         )}
         {holding.autoBalance ? (
@@ -2493,7 +2642,7 @@ function BalanceSheet({ state, holdings, onClose, onEdit, onClone, onEmi }) {
           </div>
           <div className="min-w-0 rounded-control bg-surface p-3 ring-1 ring-separator">
             <p className="text-[0.75rem] font-medium tracking-wide text-label-2 uppercase">
-              Deposited
+              {fd.rd ? "Monthly installment" : "Deposited"}
             </p>
             {fd.deposit ? (
               <>
@@ -2502,13 +2651,15 @@ function BalanceSheet({ state, holdings, onClose, onEdit, onClone, onEmi }) {
                 </p>
                 {fd.from && (
                   <p className="truncate text-[0.8125rem] text-label-2">
-                    on {shortDate(fd.from)}
+                    {fd.rd ? "from" : "on"} {shortDate(fd.from)}
                   </p>
                 )}
               </>
             ) : (
               <p className="mt-1 text-[0.8125rem] text-label-2">
-                Add the deposit amount
+                {fd.rd
+                  ? "Add the monthly installment"
+                  : "Add the deposit amount"}
               </p>
             )}
           </div>
@@ -2709,7 +2860,7 @@ function DateTile({ label, date, days, owes, empty }) {
   );
 }
 
-function HoldingRow({ h, all, onClick }) {
+function HoldingRow({ h, all, onClick, showType }) {
   const { currency } = useMeta();
   const type = nwType(h.type);
   const group = nwGroup(type.group);
@@ -2735,12 +2886,7 @@ function HoldingRow({ h, all, onClick }) {
       >
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-3">
-            <HoldingBadge
-              h={h}
-              type={type}
-              color={group.color}
-              all={all}
-            />
+            <HoldingBadge h={h} type={type} color={group.color} all={all} />
             <span className="min-w-0 flex-1">
               <span className="block text-[1.0625rem] leading-snug break-words">
                 {h.name}
@@ -2814,49 +2960,106 @@ function HoldingRow({ h, all, onClick }) {
     );
   }
 
+  // Everything but deposits keeps the plain row: logo, name (with its type
+  // underneath in a merged group) and the balance.
+  if (h.type !== "fd" && h.type !== "rd") {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cx(
+          "flex min-h-[4rem] w-full items-center gap-3 px-4 py-3 text-left active:bg-fill",
+          !h.included && "opacity-60",
+        )}
+      >
+        <HoldingBadge h={h} type={type} color={group.color} all={all} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[1.0625rem] leading-snug break-words">
+            {h.name}
+            {!h.included && (
+              <span className="ml-2 rounded-pill bg-fill px-2 py-0.5 text-[0.75rem] font-semibold whitespace-nowrap text-label-2">
+                Not counted
+              </span>
+            )}
+          </span>
+          {showType && (
+            <span className="block text-[0.75rem] text-label-2">
+              {nwType(h.type).label}
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 text-right">
+          <span className="tabular block text-[1.0625rem] font-semibold">
+            {formatMoney(h.balance, currency)}
+          </span>
+          {at && (
+            <span className="block text-[0.8125rem] text-label-2">
+              <AsOn iso={at} />
+            </span>
+          )}
+        </span>
+      </button>
+    );
+  }
+
+  const backers = h.type === "fd" ? fdBackers(h.id, all) : [];
+  const chip =
+    "inline-flex items-center rounded-pill bg-fill px-2 py-0.5 text-[0.6875rem] font-medium whitespace-nowrap text-label-2 lg:px-2.5 lg:py-1 lg:text-[0.75rem]";
+  const hasBase = h.autoBalance && h.principal > 0;
+  const hasChips = showType || hasBase || backers.length > 0;
+  const chips = hasChips && (
+    <>
+      {showType && <span className={chip}>{nwType(h.type).label}</span>}
+      {hasBase && (
+        <span className={cx(chip, "tabular")}>
+          {h.type === "rd" ? "Invested" : "Deposit"}{" "}
+          {formatMoney(h.principal, currency)}
+        </span>
+      )}
+      {backers.length > 0 && (
+        <span
+          title={backers.map((c) => c.name).join(", ")}
+          className={cx(chip, "gap-1 !bg-accent-soft !text-accent")}
+        >
+          <CreditCard aria-hidden size={12} strokeWidth={2.4} />
+          {backers.length === 1
+            ? "Backs a card"
+            : `Backs ${backers.length} cards`}
+        </span>
+      )}
+    </>
+  );
   return (
     <button
       type="button"
       onClick={onClick}
       className={cx(
-        "flex min-h-[4rem] w-full items-center gap-3 px-4 py-3 text-left active:bg-fill",
+        "block w-full px-4 py-3.5 text-left active:bg-fill",
         !h.included && "opacity-60",
       )}
     >
-      <HoldingBadge
-        h={h}
-        type={type}
-        color={group.color}
-        all={all}
-      />
-      {/* Phone: stacked. Large screens: one line (name, type, balance). */}
-      <span className="min-w-0 flex-1 lg:grid lg:grid-cols-[1fr_14rem] lg:gap-x-4">
-        <span
-          className={cx(
-            "block text-[1.0625rem] leading-snug break-words lg:col-start-1 lg:min-w-0",
-            "lg:row-span-2 lg:row-start-1 lg:self-center",
-          )}
-        >
-          {h.name}
-          <span className="ml-2 align-middle text-[0.75rem] font-normal text-label-2">
-            <NetworkBadge h={h} />
+      <span className="flex items-start gap-3 lg:items-center">
+        <HoldingBadge h={h} type={type} color={group.color} all={all} />
+        <span className="min-w-0 flex-1">
+          <span className="flex min-h-10 items-center text-base leading-snug break-words lg:block lg:min-h-0 lg:text-[1.0625rem]">
+            {h.name}
           </span>
           {!h.included && (
-            <span className="ml-2 rounded-pill bg-fill px-2 py-0.5 text-[0.75rem] font-semibold whitespace-nowrap text-label-2">
+            <span className="mt-0.5 inline-block rounded-pill bg-fill px-2 py-0.5 text-[0.75rem] font-semibold whitespace-nowrap text-label-2">
               Not counted
             </span>
           )}
-        </span>
-        <span
-          className={cx(
-            "mt-1.5 block lg:col-start-2 lg:row-start-1 lg:mt-0 lg:self-center lg:text-right",
-            "lg:row-span-2",
+          {hasChips && (
+            <span className="mt-1.5 hidden flex-wrap gap-1.5 lg:flex">
+              {chips}
+            </span>
           )}
-        >
-          <span className="tabular text-[1.0625rem] font-semibold">
+        </span>
+        <span className="shrink-0 text-right">
+          <span className="tabular block text-base font-semibold lg:text-[1.0625rem]">
             {formatMoney(h.balance, currency)}
           </span>
-          {h.autoBalance && h.principal > 0 && (
+          {hasBase && (
             <span
               className={cx(
                 "tabular block text-[0.8125rem] font-medium",
@@ -2868,19 +3071,23 @@ function HoldingRow({ h, all, onClick }) {
             </span>
           )}
           {at && (
-            <span className="text-[0.8125rem] text-label-2 lg:block">
-              {" "}
-              (<AsOn iso={at} />)
+            <span className="block text-[0.75rem] text-label-2">
+              <AsOn iso={at} />
             </span>
           )}
         </span>
       </span>
+      {hasChips && (
+        <span className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 lg:hidden">
+          {chips}
+        </span>
+      )}
     </button>
   );
 }
 
 /** A holding row with a grip on the left to drag it up or down its section. */
-function SortableHolding({ h, all, onClick, reorder }) {
+function SortableHolding({ h, all, onClick, reorder, showType }) {
   const {
     attributes,
     listeners,
@@ -2915,11 +3122,33 @@ function SortableHolding({ h, all, onClick, reorder }) {
         </button>
       )}
       <div className="min-w-0 flex-1">
-        <HoldingRow h={h} all={all} onClick={onClick} />
+        <HoldingRow h={h} all={all} onClick={onClick} showType={showType} />
       </div>
     </div>
   );
 }
+
+// One list group per instrument type, except these, which share a group.
+const MERGED_SECTIONS = [
+  {
+    id: "bank-accounts",
+    label: "Bank accounts",
+    types: ["savings", "current"],
+  },
+  { id: "deposits", label: "Deposits", types: ["fd", "rd"] },
+  {
+    id: "other-investments",
+    label: "Other investments",
+    types: ["mf", "stocks", "nps", "ppf", "epf", "bonds"],
+  },
+];
+const holdingSections = NW_TYPES.flatMap((t) => {
+  const merged = MERGED_SECTIONS.find((m) => m.types.includes(t.id));
+  if (!merged)
+    return [{ id: t.id, label: t.label, group: t.group, types: [t.id] }];
+  // The merged group sits where its first type would.
+  return t.id === merged.types[0] ? [{ ...merged, group: t.group }] : [];
+});
 
 export function NetWorthScreen() {
   const { currency } = useMeta();
@@ -3031,7 +3260,7 @@ export function NetWorthScreen() {
   const holdings = useMemo(() => {
     // An FD with its deposit details is valued by calculation, not entries.
     const list = (q.data?.holdings ?? []).map((h) => {
-      const v = fdValueNow(h, currency);
+      const v = depositValueNow(h, currency);
       return v == null
         ? h
         : {
@@ -3039,8 +3268,8 @@ export function NetWorthScreen() {
             rawBalance: h.balance,
             balance: v,
             autoBalance: true,
-            gain: v - (fdPrincipal(h, currency) ?? v),
-            principal: fdPrincipal(h, currency),
+            gain: v - (depositPrincipal(h, currency) ?? v),
+            principal: depositPrincipal(h, currency),
           };
     });
     if (!order) return list;
@@ -3168,17 +3397,17 @@ export function NetWorthScreen() {
         <>
           <Summary holdings={holdings} lending={lending} />
 
-          {NW_TYPES.map((t) => {
-            const g = nwGroup(t.group);
-            const rows = holdings.filter((h) => h.type === t.id);
+          {holdingSections.map((sec) => {
+            const g = nwGroup(sec.group);
+            const rows = holdings.filter((h) => sec.types.includes(h.type));
             if (rows.length === 0) return null;
             const total = rows
               .filter((h) => h.included)
               .reduce((n, h) => n + h.balance, 0);
             return (
               <ListGroup
-                key={t.id}
-                header={t.label}
+                key={sec.id}
+                header={sec.label}
                 headerRight={
                   <span
                     className={
@@ -3189,8 +3418,8 @@ export function NetWorthScreen() {
                     {formatMoney(total, currency)}
                   </span>
                 }
-                collapsed={Boolean(folded[t.id])}
-                onToggle={() => toggleFold(t.id)}
+                collapsed={Boolean(folded[sec.id])}
+                onToggle={() => toggleFold(sec.id)}
               >
                 <DndContext
                   sensors={sensors}
@@ -3208,6 +3437,7 @@ export function NetWorthScreen() {
                         h={h}
                         all={holdings}
                         reorder={reorder}
+                        showType={sec.types.length > 1}
                         onClick={() => setBal({ open: true, holdingId: h.id })}
                       />
                     ))}
@@ -3232,8 +3462,8 @@ export function NetWorthScreen() {
                 <ListRow
                   key={`${card.id}-${emi.id}`}
                   onClick={() => openEmi(card.id, emi.id)}
-                  leading={<CategoryBadge icon="hand-coins" color="red" />}
-                  title={emi.name}
+                  leading={<EmiLogo emi={emi} />}
+                  title={emiTitle(emi)}
                   subtitle={`${card.name} · ${formatMoney(emi.monthly, currency)}/mo · ${emi.paid} of ${emi.tenure} paid`}
                   trailing={
                     <span className="text-right">
@@ -3261,8 +3491,8 @@ export function NetWorthScreen() {
                 <ListRow
                   key={`${card.id}-${emi.id}`}
                   onClick={() => openEmi(card.id, emi.id)}
-                  leading={<CategoryBadge icon="hand-coins" color="gray" />}
-                  title={emi.name}
+                  leading={<EmiLogo emi={emi} color="gray" />}
+                  title={emiTitle(emi)}
                   subtitle={`${card.name} · ${emi.tenure} instalments`}
                   trailing={
                     <span className="flex items-center gap-1 text-[0.875rem] font-medium text-label-2">

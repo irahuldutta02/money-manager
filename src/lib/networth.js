@@ -299,6 +299,20 @@ const f = (key, label, extra) => ({ key, label, ...extra });
 const NOMINEE = [f("nomineeName", "Nominee name")];
 const MATURITY = f("maturityDate", "Maturity date", { kind: "date" });
 
+// A mutual fund account is an SOA (statement of account, identified by a folio
+// number) or a demat account; the number row's label follows the choice.
+export const MF_ACCOUNT_KINDS = ["SOA", "Demat"];
+// Shown instead of the AMC row on a demat account.
+export const DEPOSITORIES = ["NSDL", "CDSL"];
+export const MF_DEPOSITORY = {
+  key: "depository",
+  label: "Depository name",
+  kind: "choice",
+  options: DEPOSITORIES,
+};
+export const mfNumberLabel = (kind) =>
+  kind === "Demat" ? "Demat number" : "Folio number";
+
 const FIELDS = {
   savings: [
     f("bankName", "Bank name"),
@@ -337,26 +351,50 @@ const FIELDS = {
     f("bankName", "Bank name"),
     f("accountNumber", "RD number"),
     f("cif", "Customer ID"),
+    f("installment", "Monthly installment", { kind: "amount" }),
+    f("startDate", "Start date", { kind: "date", today: true }),
+    f("installmentDay", "Installment day", { kind: "day" }),
     MATURITY,
+    f("rate", "Interest rate", { kind: "rate" }),
+    f("compounding", "Interest compounding", {
+      kind: "choice",
+      options: COMPOUNDING_OPTIONS,
+      default: "Quarterly",
+    }),
+    f("maturityAmount", "Maturity amount", { kind: "amount" }),
+    f("maturityInstruction", "Maturity instruction", {
+      kind: "choice",
+      options: MATURITY_OPTIONS,
+      default: "Credit to account",
+    }),
+    f("creditAccount", "Credit account", { kind: "account" }),
     ...NOMINEE,
   ],
   mf: [
-    f("platform", "Platform / AMC"),
     f("accountKind", "Account type", {
-      type: "choice",
-      options: ["Folio", "Demat"],
+      kind: "choice",
+      options: MF_ACCOUNT_KINDS,
+      default: MF_ACCOUNT_KINDS[0],
     }),
-    f("accountNumber", "Account number"),
+    f("platform", "Platform"),
+    f("amc", "AMC"),
+    f("accountNumber", "Folio number"),
     ...NOMINEE,
   ],
   stocks: [
     f("platform", "Broker / platform"),
+    f("depository", "Depository name", {
+      kind: "choice",
+      options: DEPOSITORIES,
+    }),
     f("demat", "Demat account number"),
     ...NOMINEE,
   ],
   nps: [
     f("pran", "PRAN number"),
     f("platform", "Platform (CRA / app)"),
+    f("tier1", "Tier 1 balance", { kind: "amount" }),
+    f("tier2", "Tier 2 balance", { kind: "amount" }),
     ...NOMINEE,
   ],
   ppf: [
@@ -364,9 +402,15 @@ const FIELDS = {
     f("accountNumber", "Account number"),
     f("cif", "Customer ID"),
     f("branch", "Branch"),
+    f("openingDate", "Opening date", { kind: "date" }),
+    f("maturityDate", "Maturity date", { kind: "date" }),
     ...NOMINEE,
   ],
-  epf: [f("uan", "UAN"), f("employer", "Employer / PF office"), ...NOMINEE],
+  epf: [
+    f("uan", "UAN"),
+    f("employer", "Employer name"),
+    f("memberId", "Member ID"),
+  ],
   post_office: [
     f("scheme", "Scheme (NSC, KVP, SSY…)"),
     f("accountNumber", "Certificate / account number"),
@@ -381,7 +425,11 @@ const FIELDS = {
   ],
   bonds: [
     f("platform", "Platform"),
-    f("reference", "Demat / ISIN / reference"),
+    f("depository", "Depository name", {
+      kind: "choice",
+      options: DEPOSITORIES,
+    }),
+    f("demat", "Demat account number"),
     ...NOMINEE,
   ],
   property: [
@@ -436,6 +484,9 @@ for (const id of [
 }
 
 export const nwFields = (type) => FIELDS[type] ?? [];
+// Fields a type can show that aren't in its default rows.
+const knownFields = (type) =>
+  type === "mf" ? [...nwFields(type), MF_DEPOSITORY] : nwFields(type);
 
 /** Labels are upper case; the old "CUS ID" is now "CUSTOMER ID". */
 export const normLabel = (label) =>
@@ -456,7 +507,7 @@ export function rowKind(type, r) {
   const label = String(r?.label ?? "").toUpperCase();
   let kind = r?.kind === "variant" ? "network" : r?.kind;
   if (!DETAIL_KINDS.includes(kind)) {
-    kind = nwFields(type).find((f) => f.label.toUpperCase() === label)?.kind;
+    kind = knownFields(type).find((f) => f.label.toUpperCase() === label)?.kind;
   }
   return DETAIL_KINDS.includes(kind) ? { kind } : {};
 }
@@ -496,7 +547,7 @@ export const defaultDetailRows = (type) =>
 
 /** The choices of a "choice" row, from the type's default row of that label. */
 export const rowOptions = (type, row) =>
-  nwFields(type).find((x) => x.label.toUpperCase() === row.label)?.options ??
+  knownFields(type).find((x) => x.label.toUpperCase() === row.label)?.options ??
   [];
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -594,6 +645,140 @@ export function fdValueNow(h, currency, now = new Date()) {
       compounding: get(/compounding/i) || "Quarterly",
     }) ?? principal
   );
+}
+
+/** ISO day `months` after `iso`, clamped to the month's last day. */
+function addMonthsIso(iso, months) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const first = new Date(y, m - 1 + months, 1);
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return dayKey(
+    new Date(first.getFullYear(), first.getMonth(), Math.min(d, last)),
+  );
+}
+
+/** `iso` moved to day-of-month `day` (when it is a valid day), same month. */
+function onDay(iso, day) {
+  const d = Number(day);
+  return Number.isInteger(d) && d >= 1 && d <= 31
+    ? addMonthsIso(`${iso.slice(0, 8)}${String(d).padStart(2, "0")}`, 0)
+    : iso;
+}
+
+/** Months from ISO day `a` to `b`, counting the part of a month as a fraction. */
+function monthsBetween(a, b) {
+  const [ay, am, ad] = a.split("-").map(Number);
+  const [by, bm, bd] = b.split("-").map(Number);
+  let whole = (by - ay) * 12 + (bm - am) - (bd < ad ? 1 : 0);
+  if (whole < 0) return 0;
+  const from = new Date(ay, am - 1 + whole, ad);
+  const next = new Date(ay, am - 1 + whole + 1, ad);
+  const frac = (new Date(b + "T00:00:00") - from) / (next - from);
+  return whole + Math.min(Math.max(frac, 0), 1);
+}
+
+/**
+ * An RD's value (minor units) at `to`, the way banks work it out (SBI's
+ * matches to the rupee): installment k goes in at the start of month k and
+ * earns the rate, compounded as chosen (quarterly is usual), for the months
+ * between then and `to`. So at maturity it is the classic
+ * R·((1+i)^n − 1) / (1 − (1+i)^(−1/3)), i = rate/400, n = quarters. The
+ * tenure (start to maturity in whole months) fixes the number of installments;
+ * the installment day only decides how many are in by `to`. Also returns the
+ * amount put in so far. Null while the figures are missing.
+ */
+function rdGrowth({
+  installment,
+  rate,
+  start,
+  day,
+  maturity,
+  to,
+  compounding = "Quarterly",
+}) {
+  const r = Number(rate);
+  if (!(installment > 0) || !(r >= 0) || rate === "") return null;
+  if (!ISO_DAY.test(start ?? "") || !ISO_DAY.test(to ?? "")) return null;
+  let count = 600;
+  if (ISO_DAY.test(maturity ?? "")) {
+    const [sy, sm, sd] = start.split("-").map(Number);
+    const [my, mm, md] = maturity.split("-").map(Number);
+    count = (my - sy) * 12 + (mm - sm) - (md < sd ? 1 : 0);
+  }
+  const elapsed = monthsBetween(start, to);
+  const n = COMPOUNDING_PER_YEAR[compounding];
+  let value = 0;
+  let paid = 0;
+  for (let k = 0; k < count; k++) {
+    // The first installment goes in on the start date, the rest on the
+    // installment day of each following month (the start date's day if unset).
+    const at = k === 0 ? start : addMonthsIso(onDay(start, day), k);
+    if (at > to) break;
+    const years = Math.max(0, elapsed - k) / 12;
+    paid += installment;
+    value += n
+      ? installment * (1 + r / (100 * n)) ** (n * years)
+      : installment * (1 + (r * years) / 100);
+  }
+  return paid > 0 ? { value: Math.round(value), paid } : null;
+}
+
+/** An RD's maturity value, from the installment, rate, dates and compounding. */
+export const rdMaturity = ({
+  installment,
+  rate,
+  start,
+  day,
+  maturity,
+  compounding,
+}) =>
+  ISO_DAY.test(maturity ?? "")
+    ? (rdGrowth({
+        installment,
+        rate,
+        start,
+        day,
+        maturity,
+        to: maturity,
+        compounding,
+      })?.value ?? null)
+    : null;
+
+function rdRead(h, currency) {
+  const rows = detailRows(h.type, h.details);
+  const get = (re, kind) =>
+    rows.find((r) => (kind ? r.kind === kind : re.test(r.label)))?.value ?? "";
+  const amount = Number(get(/installment(?! day)/i));
+  return {
+    installment: amount > 0 ? toMinor(amount, currency) : 0,
+    rate: get(null, "rate"),
+    start: get(/start date/i),
+    day: get(/installment day/i),
+    maturity: get(/maturity date/i),
+    compounding: get(/compounding/i) || "Quarterly",
+  };
+}
+
+/** What a deposit (FD or RD) is worth today, worked out from its details. */
+export function depositValueNow(h, currency, now = new Date()) {
+  if (h.type === "fd") return fdValueNow(h, currency, now);
+  if (h.type !== "rd") return null;
+  const d = rdRead(h, currency);
+  const today = dayKey(now);
+  const to =
+    ISO_DAY.test(d.maturity) && d.maturity < today ? d.maturity : today;
+  return rdGrowth({ ...d, to })?.value ?? null;
+}
+
+/** What has been put into a deposit so far (minor units), or null. */
+export function depositPrincipal(h, currency, now = new Date()) {
+  if (h.type === "fd") return fdPrincipal(h, currency);
+  if (h.type !== "rd") return null;
+  const d = rdRead(h, currency);
+  const today = dayKey(now);
+  const to =
+    ISO_DAY.test(d.maturity) && d.maturity < today ? d.maturity : today;
+  return rdGrowth({ ...d, to })?.paid ?? null;
 }
 
 /**
@@ -704,6 +889,28 @@ export function cardBackingFds(card) {
   return (v ?? "").split(",").filter(Boolean);
 }
 
+/** Instruments you can only have one of (EPF employers and NPS tiers live inside). */
+export const SINGLE_TYPES = ["epf", "nps", "ppf"];
+
+/**
+ * An NPS account's tiers (minor units): Tier 1 and Tier 2 balances typed in
+ * its details. The overall balance is their sum. Null when neither is filled.
+ */
+export function npsTiers(h, currency) {
+  if (h.type !== "nps") return null;
+  const rows = detailRows(h.type, h.details);
+  const get = (re) => {
+    const v = rows.find((r) => re.test(r.label))?.value ?? "";
+    return v.trim() !== "" && Number.isFinite(Number(v))
+      ? toMinor(Number(v), currency)
+      : null;
+  };
+  const one = get(/tier\s*(1|i)\b/i);
+  const two = get(/tier\s*(2|ii)\b/i);
+  if (one == null && two == null) return null;
+  return { one: one ?? 0, two: two ?? 0, total: (one ?? 0) + (two ?? 0) };
+}
+
 /** The credit cards an FD backs (an FD can't be deleted while it does). */
 export const fdBackers = (fdId, holdings) =>
   holdings.filter(
@@ -723,12 +930,12 @@ const platformOf = (h) =>
 
 /** An FD's platform logo, or one set on another FD from the same platform. */
 export function platformIconFor(h, all) {
-  if (h.type !== "fd") return "";
+  if (!["fd", "mf", "stocks", "bonds"].includes(h.type)) return "";
   if (h.platformIcon) return h.platformIcon;
   const p = platformOf(h);
   if (!p) return "";
   return (
-    all.find((c) => c.type === "fd" && c.platformIcon && platformOf(c) === p)
+    all.find((c) => c.type === h.type && c.platformIcon && platformOf(c) === p)
       ?.platformIcon ?? ""
   );
 }
