@@ -39,7 +39,7 @@ Money Manager helps you:
 * 💸 Transactions: add, edit, delete and restore, with receipt attachments
 * 🏦 Accounts & Categories Management, with balance rebuild
 * 🎯 Monthly Budgets, with copy-from-previous-month
-* 🤝 Track Lending: a separate IOU ledger per person
+* 🤝 Track P2P Lending: a separate IOU ledger per person
 * 📈 Net Worth: balance history per instrument (accounts, investments, loans)
 * 📊 Stats & Charts by day, week, month and year
 * 🔍 Search, Filters and CSV Export

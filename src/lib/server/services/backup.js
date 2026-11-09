@@ -4,7 +4,7 @@ import { ApiError } from "../api";
 import { recomputeBalances } from "./accounts";
 import { LENDING_KINDS } from "./lending";
 import { NW_TYPE_IDS } from "@/lib/networth";
-import { cleanDetails } from "./networth";
+import { cleanDetails, cleanEmis } from "./networth";
 import {
   ACCOUNT_TYPES,
   CATEGORY_TYPES,
@@ -228,6 +228,9 @@ export function validateBackup(data, userId) {
         included: r.included !== false,
         note: str(r.note, "note", { max: 200, optional: true }),
         icon: iconImage(r.icon),
+        issuerIcon: iconImage(r.issuerIcon),
+        platformIcon: iconImage(r.platformIcon),
+        emis: cleanEmis(r.emis),
         details: cleanDetails(oneOf(r.type, "type", NW_TYPE_IDS), r.details),
         balance,
         history: history.length ? history : [{ at: new Date(), balance }],

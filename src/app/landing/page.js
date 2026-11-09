@@ -68,7 +68,7 @@ const STEPS = [
   ["Sign in", "One tap with Google. No passwords to remember."],
   [
     "Pick your setup",
-    "Choose your currency, and starter categories and a Cash account, or start from scratch.",
+    "Pick starter categories and a Cash account, or start from scratch. Everything is in ₹.",
   ],
   [
     "Start tracking",
@@ -229,7 +229,7 @@ export default function LandingPage() {
               className="lp-rise mt-4 text-xs text-label-2"
               style={{ "--d": "0.32s" }}
             >
-              Sign in with Google · ₹ INR, $ USD and 18 more currencies
+              Sign in with Google · Built for India, in ₹ INR
             </p>
           </div>
 

@@ -1,7 +1,6 @@
 import "server-only";
 import { col, newId, withTransaction } from "../mongodb";
 import { ApiError } from "../api";
-import { CURRENCIES } from "@/lib/currencies";
 import { publicDoc } from "../validate";
 import {
   DEFAULT_EXPENSE_CATEGORIES,
@@ -12,12 +11,8 @@ function isDuplicateKey(err) {
   return err?.code === 11000;
 }
 
-const SUPPORTED_CURRENCIES = CURRENCIES.map((c) => c.code);
-
-export function validCurrency(code) {
-  const c = typeof code === "string" ? code.toUpperCase() : "";
-  return SUPPORTED_CURRENCIES.includes(c) ? c : null;
-}
+// Every account is in rupees: the app is for Indian users.
+const CURRENCY = "INR";
 
 /** Everything the client needs to boot, in one read. */
 export async function getMeta(userId) {
@@ -52,10 +47,10 @@ export async function getMeta(userId) {
  */
 export async function ensureSetup(
   userId,
-  currency,
+  _currency, // ignored: always INR
   { starterCategories = true, cashAccount = true } = {},
 ) {
-  const cur = validCurrency(currency) ?? "INR";
+  const cur = CURRENCY;
   try {
     await withTransaction(async (session) => {
       const settings = col("userSettings");

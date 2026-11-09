@@ -43,7 +43,12 @@ export function ThemeSheet({ open, onClose, onChanged }) {
       matchMedia("(prefers-color-scheme: dark)").matches);
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Appearance">
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Appearance"
+      confirmClose={false}
+    >
       <div
         role="radiogroup"
         aria-label="Theme"

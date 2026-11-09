@@ -4,11 +4,6 @@ import { createContext, useContext, useMemo, useState } from "react";
 import { apiFetch } from "./api";
 import { invalidateAll, useQuery } from "./query";
 import { Button } from "@/components/ui/Button";
-import { CURRENCIES } from "@/lib/currencies";
-import { currencySymbol } from "@/lib/money";
-import { PickerField } from "@/components/ui/Picker";
-import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Check } from "lucide-react";
 import { CategoryBadge } from "@/components/ui/CategoryBadge";
 import { ListGroup, ListRow } from "@/components/ui/ListGroup";
 import { ErrorState } from "@/components/ui/States";
@@ -20,44 +15,6 @@ export function useMeta() {
   const ctx = useContext(MetaContext);
   if (!ctx) throw new Error("useMeta must be used inside <MetaProvider>");
   return ctx;
-}
-
-// Pre-select a currency from the browser locale (INR if unknown).
-const REGION_CURRENCY = {
-  IN: "INR",
-  US: "USD",
-  GB: "GBP",
-  AE: "AED",
-  SG: "SGD",
-  AU: "AUD",
-  CA: "CAD",
-  JP: "JPY",
-  CN: "CNY",
-  CH: "CHF",
-  BD: "BDT",
-  NP: "NPR",
-  PK: "PKR",
-  LK: "LKR",
-  SA: "SAR",
-  ID: "IDR",
-  BR: "BRL",
-  MX: "MXN",
-  ZA: "ZAR",
-  DE: "EUR",
-  FR: "EUR",
-  ES: "EUR",
-  IT: "EUR",
-  NL: "EUR",
-  IE: "EUR",
-  PT: "EUR",
-};
-function guessCurrency() {
-  try {
-    const region = new Intl.Locale(navigator.language).maximize().region;
-    return REGION_CURRENCY[region] ?? "INR";
-  } catch {
-    return "INR";
-  }
 }
 
 function Switch({ on }) {
@@ -77,14 +34,12 @@ function Switch({ on }) {
   );
 }
 
-const CURRENCY_NAME = Object.fromEntries(
-  CURRENCIES.map((c) => [c.code, c.name]),
-);
+// The app is built for Indian users, so every account is in rupees.
+const CURRENCY = "INR";
+
 function Onboarding({ onDone }) {
-  const [currency, setCurrency] = useState(guessCurrency);
   const [starter, setStarter] = useState(true);
   const [cash, setCash] = useState(true);
-  const [panel, setPanel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -94,7 +49,11 @@ function Onboarding({ onDone }) {
     try {
       await apiFetch("/api/setup", {
         method: "POST",
-        body: { currency, starterCategories: starter, cashAccount: cash },
+        body: {
+          currency: CURRENCY,
+          starterCategories: starter,
+          cashAccount: cash,
+        },
       });
       onDone();
     } catch (e) {
@@ -139,60 +98,6 @@ function Onboarding({ onDone }) {
           trailing={<Switch on={starter} />}
         />
       </ListGroup>
-
-      <div>
-        <PickerField
-          label="Currency"
-          value={`${currencySymbol(currency)} ${CURRENCY_NAME[currency]} (${currency})`}
-          active={panel}
-          onClick={() => setPanel((p) => !p)}
-        />
-        <BottomSheet
-          open={panel}
-          onClose={() => setPanel(false)}
-          title="Currency"
-          tall={false}
-        >
-          <ul role="listbox" aria-label="Currency" className="space-y-0.5 pt-2">
-            {CURRENCIES.map((c) => {
-              const active = c.code === currency;
-              return (
-                <li key={c.code} role="presentation">
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={active}
-                    onClick={() => {
-                      setCurrency(c.code);
-                      setPanel(false);
-                    }}
-                    className={`flex min-h-tap w-full items-center gap-3 rounded-control px-3 text-left active:bg-fill ${
-                      active ? "bg-accent-soft text-accent" : ""
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className="w-10 shrink-0 text-center text-label-2"
-                    >
-                      {currencySymbol(c.code)}
-                    </span>
-                    <span className="flex-1 truncate">
-                      {c.name} ({c.code})
-                    </span>
-                    {active ? (
-                      <Check aria-hidden size={18} strokeWidth={2.6} />
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </BottomSheet>
-        <p className="mt-2 px-1 text-xs text-label-2">
-          Can&apos;t be changed later, because amounts are stored in this
-          currency&apos;s smallest unit.
-        </p>
-      </div>
 
       {error && (
         <p role="alert" className="text-center text-sm text-danger">

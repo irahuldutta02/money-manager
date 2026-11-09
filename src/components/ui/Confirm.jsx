@@ -81,7 +81,7 @@ export function ConfirmProvider({ children }) {
               autoFocus
               onClick={() => finish(false)}
             >
-              Cancel
+              {opts.cancelLabel ?? "Cancel"}
             </Button>
             <Button variant="danger" size="lg" onClick={() => finish(true)}>
               {opts.confirmLabel ?? "Delete"}

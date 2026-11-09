@@ -1,5 +1,13 @@
-import { fromMinor } from "@/lib/money";
-import { NW_GROUPS, netWorthTotals, nwFields, nwType } from "@/lib/networth";
+import { fromMinor, toMinor } from "@/lib/money";
+import {
+  NW_GROUPS,
+  detailRows,
+  cardEmis,
+  formatDetailValue,
+  holdingValue,
+  netWorthTotals,
+  nwType,
+} from "@/lib/networth";
 
 // Builds the "handover" PDF in the browser (jsPDF is loaded on demand, so it
 // costs nothing until the button is used). The built-in PDF fonts have no
@@ -102,7 +110,7 @@ export async function downloadNetWorthPdf(input) {
     if (rows.length === 0) continue;
     const total = rows
       .filter((x) => x.included)
-      .reduce((n, x) => n + x.balance, 0);
+      .reduce((n, x) => n + holdingValue(x), 0);
 
     ensure(22);
     font("bold", 12);
@@ -116,18 +124,42 @@ export async function downloadNetWorthPdf(input) {
     for (const x of rows) {
       const type = nwType(x.type);
       const last = x.history?.[x.history.length - 1];
-      const pairs = nwFields(x.type)
-        .filter((f) => x.details?.[f.key])
-        .map((f) => ({
-          label: f.label,
-          value:
-            f.type === "date"
-              ? dateText(new Date(`${x.details[f.key]}T12:00:00`))
-              : x.details[f.key],
-        }));
+      const pairs = detailRows(x.type, x.details)
+        .filter((r) => r.value)
+        .map((r) =>
+          r.kind === "amount" && Number.isFinite(Number(r.value))
+            ? { ...r, value: money(toMinor(Number(r.value), currency)) }
+            : r.kind === "account"
+              ? {
+                  ...r,
+                  value: holdings.find((c) => c.id === r.value)?.name ?? "",
+                }
+              : r,
+        )
+        .map((r) =>
+          r.kind === "linkcard"
+            ? {
+                ...r,
+                value: r.value
+                  .split(",")
+                  .map((id) => holdings.find((c) => c.id === id)?.name)
+                  .filter(Boolean)
+                  .join(", "),
+              }
+            : r,
+        )
+        .filter((r) => r.value)
+        .concat(
+          cardEmis(x).list.map((e) => ({
+            label: `EMI: ${e.name}`.toUpperCase(),
+            value: e.active
+              ? `${money(e.monthly)}/mo, ${e.remaining} of ${e.tenure} left, ${money(e.payable)} payable`
+              : "Completed",
+          })),
+        );
       const wrapped = pairs.map((p) => ({
         ...p,
-        lines: doc.splitTextToSize(p.value, cw - 62),
+        lines: doc.splitTextToSize(formatDetailValue(p), cw - 62),
       }));
       const need =
         11 + wrapped.reduce((n, p) => n + p.lines.length * 4.3 + 1, 0) + 4;
@@ -179,7 +211,7 @@ export async function downloadNetWorthPdf(input) {
     ensure(24);
     font("bold", 12);
     color(INK);
-    doc.text("Money lent and owed (Track Lending)", m, y + 4);
+    doc.text("Money lent and owed (Track P2P Lending)", m, y + 4);
     y += 7;
     rule(3);
     for (const p of open) {

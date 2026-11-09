@@ -35,7 +35,7 @@ const NetWorthIcon = (p) => <TrendingUp strokeWidth={2} {...p} />;
 // Pages under /more that get their own nav entry (sidebar + mobile "..." menu),
 // so "More" must not light up for them.
 const MORE_ITEMS = [
-  { href: LENDING, label: "Track Lending", Icon: LendingIcon },
+  { href: LENDING, label: "Track P2P Lending", Icon: LendingIcon },
   { href: NETWORTH, label: "Net Worth", Icon: NetWorthIcon },
 ];
 const SIDEBAR_TABS = [...TABS.slice(0, 3), ...MORE_ITEMS, TABS[3]];

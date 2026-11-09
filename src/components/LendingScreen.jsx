@@ -631,7 +631,7 @@ export function LendingScreen() {
       >
         <ChevronLeftIcon /> More
       </Link>
-      <h1 className="sr-only">Track lending</h1>
+      <h1 className="sr-only">Track P2P Lending</h1>
 
       {q.loading ? (
         <div className="space-y-4" aria-busy="true">

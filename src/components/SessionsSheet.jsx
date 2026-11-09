@@ -146,6 +146,7 @@ export function SessionsSheet({ open, onClose }) {
       open={open}
       onClose={onClose}
       title="Signed-in devices"
+      confirmClose={false}
       tall={false}
       footer={
         <div className="space-y-2">

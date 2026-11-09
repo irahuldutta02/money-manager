@@ -62,6 +62,7 @@ export function PasskeySheet({ open, onClose }) {
       open={open}
       onClose={onClose}
       title="Passkeys"
+      confirmClose={false}
       tall={false}
       footer={
         <Button size="lg" onClick={add} loading={busy}>

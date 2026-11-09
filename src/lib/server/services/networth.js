@@ -6,39 +6,92 @@ import {
   date,
   iconImage,
   int,
+  isId,
   oneOf,
   publicDoc,
   str,
 } from "../validate";
-import { NW_TYPE_IDS, nwFields } from "@/lib/networth";
+import {
+  MAX_DETAIL_ROWS,
+  MAX_EMIS,
+  emiError,
+  NW_TYPE_IDS,
+  detailRows,
+  normLabel,
+  rowKind,
+} from "@/lib/networth";
 
 // Net worth instruments (accounts, investments, loans) with a balance history.
 // Entirely separate from transactions: balances here are typed in, not derived.
 const MAX_HISTORY = 100;
 
-/** Keeps only the detail fields this type defines; trims, caps, drops empties. */
+/** Free-form {label, value} rows: trimmed, capped, blank rows dropped. */
 export function cleanDetails(type, raw) {
-  if (raw == null) return {};
-  if (typeof raw !== "object" || Array.isArray(raw)) {
-    throw new ApiError(400, "details is invalid");
+  if (raw == null) return [];
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return detailRows(type, raw); // legacy keyed object (older backups)
   }
-  const out = {};
-  for (const fld of nwFields(type)) {
-    const v = raw[fld.key];
-    if (v == null || v === "") continue;
-    if (typeof v !== "string")
-      throw new ApiError(400, `${fld.label} is invalid`);
-    const t = v.trim();
-    if (!t) continue;
-    if (t.length > 200) {
-      throw new ApiError(400, `${fld.label} must be at most 200 characters`);
-    }
-    if (fld.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(t)) {
-      throw new ApiError(400, `${fld.label} is invalid`);
-    }
-    out[fld.key] = t;
+  if (!Array.isArray(raw)) throw new ApiError(400, "details is invalid");
+  if (raw.length > MAX_DETAIL_ROWS) {
+    throw new ApiError(400, `At most ${MAX_DETAIL_ROWS} details`);
+  }
+  const out = [];
+  for (const r of raw) {
+    if (!r || typeof r !== "object")
+      throw new ApiError(400, "details is invalid");
+    const label = normLabel(r.label);
+    const value = String(r.value ?? "").trim();
+    if (!label && !value) continue;
+    if (!label) throw new ApiError(400, "Each detail needs a label");
+    if (label.length > 60)
+      throw new ApiError(400, "Labels must be at most 60 characters");
+    if (value.length > 200)
+      throw new ApiError(400, "Values must be at most 200 characters");
+    out.push({
+      label,
+      value,
+      ...rowKind(type, { ...r, label }),
+    });
   }
   return out;
+}
+
+/** Card EMIs: capped, each with a name, amounts, tenure and first date. */
+export function cleanEmis(raw) {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) throw new ApiError(400, "emis is invalid");
+  if (raw.length > MAX_EMIS) {
+    throw new ApiError(400, `At most ${MAX_EMIS} EMIs`);
+  }
+  const names = new Set();
+  return raw.map((e) => {
+    if (!e || typeof e !== "object") throw new ApiError(400, "emis is invalid");
+    const emi = {
+      id: str(e.id ?? newId(), "emi id", { max: 40 }),
+      name: typeof e.name === "string" ? e.name.trim() : "",
+      principal: e.principal,
+      monthly: e.monthly,
+      tenure: e.tenure,
+      start: date(e.start, "first EMI date"),
+      ...(e.paidCount != null && { paidCount: e.paidCount }),
+      ...(e.custom != null && { custom: e.custom }),
+      ...(e.noInterest === true && { noInterest: true }),
+    };
+    if (emi.principal > MAX_AMOUNT || emi.monthly > MAX_AMOUNT)
+      throw new ApiError(400, "An EMI amount is too large");
+    const err = emiError(emi);
+    if (err) throw new ApiError(400, err);
+    const key = emi.name.toLowerCase();
+    if (names.has(key))
+      throw new ApiError(400, `Another EMI is already called "${emi.name}"`);
+    names.add(key);
+    if (emi.custom)
+      emi.custom = emi.custom.map((c) => ({
+        principal: c.principal,
+        interest: c.interest,
+      }));
+    return emi;
+  });
 }
 
 const bal = (v) => int(v, "balance", { min: -MAX_AMOUNT, max: MAX_AMOUNT });
@@ -58,6 +111,15 @@ function parseFields(body, { partial, currentType }) {
   }
   if (!partial || body.icon !== undefined) {
     out.icon = iconImage(body.icon);
+  }
+  if (body.emis !== undefined) {
+    out.emis = cleanEmis(body.emis);
+  }
+  if (!partial || body.platformIcon !== undefined) {
+    out.platformIcon = iconImage(body.platformIcon);
+  }
+  if (!partial || body.issuerIcon !== undefined) {
+    out.issuerIcon = iconImage(body.issuerIcon);
   }
   if (!partial || body.details !== undefined) {
     const type = out.type ?? currentType;
@@ -186,6 +248,23 @@ export async function updateHolding(userId, holdingId, body) {
 }
 
 export async function deleteHolding(userId, holdingId) {
+  // An FD that backs a credit card stays until the card is deleted (or the
+  // link is removed).
+  const cards = await col("holdings")
+    .find({ userId, deletedAt: null, type: "credit_card" })
+    .toArray();
+  const backed = cards.filter((c) =>
+    detailRows(c.type, c.details)
+      .find((r) => r.kind === "fdlink")
+      ?.value.split(",")
+      .includes(holdingId),
+  );
+  if (backed.length) {
+    throw new ApiError(
+      409,
+      `This FD backs ${backed.map((c) => c.name).join(", ")}. Delete the card or remove the link first.`,
+    );
+  }
   const r = await col("holdings").updateOne(
     { _id: holdingId, userId, deletedAt: null },
     { $set: { deletedAt: new Date(), updatedAt: new Date() } },
@@ -204,4 +283,22 @@ export async function setLendingIncluded(userId, body) {
   );
   if (!r.matchedCount) throw new ApiError(404, "Not found", "not_found");
   return { lendingIncluded: body.included };
+}
+
+/** Save a new display order: `ids` (every instrument, top to bottom). */
+export async function reorderHoldings(userId, body) {
+  const ids = body?.ids;
+  if (!Array.isArray(ids) || ids.length > 2000 || !ids.every(isId)) {
+    throw new ApiError(400, "ids is invalid");
+  }
+  if (ids.length === 0) return { ok: true };
+  await col("holdings").bulkWrite(
+    ids.map((id, i) => ({
+      updateOne: {
+        filter: { _id: id, userId },
+        update: { $set: { sortOrder: i } },
+      },
+    })),
+  );
+  return { ok: true };
 }
